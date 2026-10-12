@@ -52,6 +52,16 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------------------------
+# Inisialisasi Session State untuk Navigasi
+# ----------------------------------------------------------------------------
+if "nav_radio" not in st.session_state:
+    st.session_state["nav_radio"] = "🏠 Dashboard Beranda"
+
+def change_page(page_name):
+    st.session_state["nav_radio"] = page_name
+    st.rerun()
+
+# ----------------------------------------------------------------------------
 # Custom CSS untuk UI/UX Modern & Warna Emoji Asli
 # ----------------------------------------------------------------------------
 st.markdown("""
@@ -81,7 +91,7 @@ st.markdown("""
         border: 1px solid #374151;
         box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
-        margin-bottom: 15px;
+        margin-bottom: 10px;
     }
     .custom-card:hover {
         transform: translateY(-2px);
@@ -125,7 +135,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
-# Konfigurasi Multi-Dataset
+# Konfigurasi Multi-Dataset & Deskripsi
 # ----------------------------------------------------------------------------
 LOADERS = {
     "Diabetes": load_diabetes,
@@ -145,6 +155,14 @@ TASK_LABEL = {
     "regresi": "Regresi Linear",
     "klasifikasi": "Klasifikasi",
     "clustering": "Clustering",
+}
+
+DATASET_DESC = {
+    "Diabetes": "Prediksi tingkat progres atau keparahan penyakit diabetes dalam 1 tahun berdasarkan metrik kesehatan.",
+    "California Housing": "Prediksi rata-rata harga rumah di wilayah California berdasarkan fitur geografis & demografis.",
+    "Iris": "Klasifikasi spesies bunga Iris (Setosa, Versicolor, Virginica) berdasarkan ukuran panjang dan lebar kelopaknya.",
+    "Wine": "Klasifikasi asal usul jenis wine (anggur) berdasarkan analisis kandungan kimianya.",
+    "Breast Cancer": "Klasifikasi jenis tumor jinak atau ganas (kanker payudara) berdasarkan fitur sel medis."
 }
 
 # ----------------------------------------------------------------------------
@@ -381,6 +399,10 @@ def select_data(task, key_prefix):
         disabled=db is None,
         key=f"{key_prefix}_extra",
     )
+    
+    # Menampilkan Deskripsi Dataset Secara Otomatis
+    st.caption(f"ℹ️ **Deskripsi Dataset:** {DATASET_DESC.get(name, '')}")
+    
     df, n_extra, feats, tn = get_training_df(task, name, use_extra and db is not None)
     st.caption(f"📊 Total Data Latih: **{len(df)}** baris (Data Tambahan Pengguna: **{n_extra}**)")
     return name, df, n_extra, feats, tn
@@ -391,9 +413,10 @@ def select_data(task, key_prefix):
 # ----------------------------------------------------------------------------
 def page_home():
     st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.<br>TAS AI : Hana Meisaria 632025057",unsafe_allow_html=True)
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.<br>**TAS AI : Hana Meisaria 632025057**", unsafe_allow_html=True)
     st.write("")
 
+    # Pembuatan Kartu Navigasi yang Bisa Diklik
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('''
@@ -402,6 +425,9 @@ def page_home():
                 <div class="card-desc">Prediksi nilai kontinu dengan pilihan dataset <b>Diabetes</b> & <b>California Housing</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
+        if st.button("🚀 Buka Modul Regresi", key="btn_nav_reg", use_container_width=True):
+            change_page("📈 Regresi Linear")
+            
     with c2:
         st.markdown('''
             <div class="custom-card">
@@ -409,6 +435,9 @@ def page_home():
                 <div class="card-desc">Prediksi kategori kelas dengan pilihan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
+        if st.button("🚀 Buka Modul Klasifikasi", key="btn_nav_clf", use_container_width=True):
+            change_page("🧪 Klasifikasi")
+            
     with c3:
         st.markdown('''
             <div class="custom-card">
@@ -416,7 +445,10 @@ def page_home():
                 <div class="card-desc">Pengelompokan data tak berlabel dengan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
+        if st.button("🚀 Buka Modul Clustering", key="btn_nav_clu", use_container_width=True):
+            change_page("🔵 Clustering")
 
+    st.write("---")
     st.subheader("⚡ Status Server & Database")
     if db is None:
         st.error(f"MongoDB belum terhubung: {db_error}")
@@ -429,6 +461,7 @@ def page_home():
                     {
                         "Modul Pemodelan": TASK_LABEL[task],
                         "Dataset": n,
+                        "Deskripsi Singkat": DATASET_DESC.get(n, "-"),
                         "Data Tambahan (MongoDB)": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
                         "Model Biner Tersimpan": db.models.count_documents({"key": f"{task}:{n}"}),
                     }
@@ -440,7 +473,6 @@ def page_home():
 def page_regresi():
     st.markdown('<h1 class="main-title-container">📈 <span class="gradient-text">Regresi Linear</span></h1>', unsafe_allow_html=True)
     
-    # Deskripsi Singkat Modul
     st.info(
         "💡 **Deskripsi Modul Regresi Linear:**\n\n"
         "Regresi Linear digunakan untuk memprediksi nilai variabel target berupa **angka kontinu** "
@@ -448,13 +480,6 @@ def page_regresi():
     )
     
     name, df, n_extra, feats, tn = select_data("regresi", "reg")
-    
-    # Penjelasan singkat dataset yang dipilih
-    if name == "Diabetes":
-        st.caption("ℹ️ **Diabetes Dataset:** Memprediksi tingkat atau progres kuantitatif perkembangan penyakit diabetes dalam 1 tahun.")
-    elif name == "California Housing":
-        st.caption("ℹ️ **California Housing Dataset:** Memprediksi rata-rata harga rumah di wilayah California berdasarkan fitur geografis & demografis.")
-
     test_size = st.slider("Proporsi Data Uji (Test Size)", 0.1, 0.5, 0.2, 0.05, key="reg_ts")
     
     res = run_model("regresi", df, test_size=test_size)
@@ -496,10 +521,10 @@ def page_regresi():
             st.balloons()
             st.success(f"Hasil Prediksi Target: **{y:.4f}**")
 
+
 def page_klasifikasi():
     st.markdown('<h1 class="main-title-container">🧪 <span class="gradient-text">Klasifikasi Multi-Algoritma</span></h1>', unsafe_allow_html=True)
     
-    # Deskripsi Singkat Modul
     st.info(
         "💡 **Deskripsi Modul Klasifikasi:**\n\n"
         "Klasifikasi adalah teknik *supervised learning* untuk mengelompokkan data ke dalam **kategori/kelas diskrit** "
@@ -513,7 +538,6 @@ def page_klasifikasi():
         "Pilih Algoritma ML", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="clf_model"
     )
     
-    # Deskripsi singkat algoritma yang dipilih
     algo_desc = {
         "Random Forest": "🌲 **Random Forest:** Kombinasi banyak Decision Tree (*ensemble*) untuk prediksi yang stabil dan akurat.",
         "Logistic Regression": "📐 **Logistic Regression:** Model linier probabilistik untuk mengukur peluang keanggotaan kelas.",
@@ -560,10 +584,10 @@ def page_klasifikasi():
                 idx_labels = [tn[c] if tn else str(c) for c in res["model"].classes_]
                 st.bar_chart(pd.Series(proba, index=idx_labels))
 
+
 def page_clustering():
     st.markdown('<h1 class="main-title-container">🔵 <span class="gradient-text">Clustering K-Means</span></h1>', unsafe_allow_html=True)
     
-    # Deskripsi Singkat Modul
     st.info(
         "💡 **Deskripsi Modul Clustering (Unsupervised Learning):**\n\n"
         "Clustering bertujuan mengelompokkan data ke dalam **beberapa kelompok (cluster)** tanpa petunjuk label awal, "
@@ -609,6 +633,7 @@ def page_clustering():
             Xn = res["scaler"].transform(pd.DataFrame([vals], columns=feats))
             st.success(f"Data Tersebut Masuk ke **Cluster {int(res['model'].predict(Xn)[0])}**")
 
+
 def page_retrain():
     st.markdown('<h1 class="main-title-container">🔁 <span class="gradient-text">Management Data & Retraining</span></h1>', unsafe_allow_html=True)
     if db is None:
@@ -618,6 +643,9 @@ def page_retrain():
     c1, c2 = st.columns(2)
     task = c1.selectbox("Modul Pemodelan", list(TASK_LABEL), format_func=TASK_LABEL.get, key="rt_task")
     name = c2.selectbox("Dataset Tujuan", TASK_DATASETS[task], key="rt_ds")
+    
+    st.caption(f"ℹ️ **Dataset:** {DATASET_DESC.get(name, '')}")
+    
     base, feats, tn = load_base(name)
     key = f"{task}:{name}"
     n_extra = db.dataset_tambahan.count_documents({"key": key})
@@ -805,7 +833,12 @@ PAGES = {
 }
 
 st.sidebar.markdown("### 👩‍🎓 Menu Navigasi")
-choice = st.sidebar.radio("Navigasi", list(PAGES), label_visibility="collapsed")
+choice = st.sidebar.radio(
+    "Navigasi", 
+    list(PAGES.keys()), 
+    label_visibility="collapsed",
+    key="nav_radio"
+)
 st.sidebar.divider()
 
 if db is None:
