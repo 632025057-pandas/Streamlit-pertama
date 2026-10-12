@@ -52,14 +52,14 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------------------------
-# Inisialisasi Session State untuk Navigasi
+# Inisialisasi Session State untuk Navigasi (DIPERBAIKI)
 # ----------------------------------------------------------------------------
 if "nav_radio" not in st.session_state:
     st.session_state["nav_radio"] = "🏠 Dashboard Beranda"
 
 def change_page(page_name):
+    # Hanya mengubah state, Streamlit otomatis melakukan rerun pada callback
     st.session_state["nav_radio"] = page_name
-    st.rerun()
 
 # ----------------------------------------------------------------------------
 # Custom CSS untuk UI/UX Modern & Warna Emoji Asli
@@ -70,7 +70,6 @@ st.markdown("""
         background-color: #0e1117;
     }
     
-    /* Teks Gradasi (Tanpa mempengaruhi emoji di luarnya) */
     .gradient-text {
         background: linear-gradient(90deg, #4F46E5, #06B6D4);
         -webkit-background-clip: text;
@@ -400,7 +399,6 @@ def select_data(task, key_prefix):
         key=f"{key_prefix}_extra",
     )
     
-    # Menampilkan Deskripsi Dataset Secara Otomatis
     st.caption(f"ℹ️ **Deskripsi Dataset:** {DATASET_DESC.get(name, '')}")
     
     df, n_extra, feats, tn = get_training_df(task, name, use_extra and db is not None)
@@ -416,7 +414,7 @@ def page_home():
     st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.<br>**TAS AI : Hana Meisaria 632025057**", unsafe_allow_html=True)
     st.write("")
 
-    # Pembuatan Kartu Navigasi yang Bisa Diklik
+    # PERBAIKAN: Tombol navigasi menggunakan callback on_click
     c1, c2, c3 = st.columns(3)
     with c1:
         st.markdown('''
@@ -425,8 +423,7 @@ def page_home():
                 <div class="card-desc">Prediksi nilai kontinu dengan pilihan dataset <b>Diabetes</b> & <b>California Housing</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
-        if st.button("🚀 Buka Modul Regresi", key="btn_nav_reg", use_container_width=True):
-            change_page("📈 Regresi Linear")
+        st.button("🚀 Modul Regresi", key="btn_nav_reg", use_container_width=True, on_click=change_page, args=("📈 Regresi Linear",))
             
     with c2:
         st.markdown('''
@@ -435,8 +432,7 @@ def page_home():
                 <div class="card-desc">Prediksi kategori kelas dengan pilihan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
-        if st.button("🚀 Buka Modul Klasifikasi", key="btn_nav_clf", use_container_width=True):
-            change_page("🧪 Klasifikasi")
+        st.button("🚀 Modul Klasifikasi", key="btn_nav_clf", use_container_width=True, on_click=change_page, args=("🧪 Klasifikasi",))
             
     with c3:
         st.markdown('''
@@ -445,8 +441,7 @@ def page_home():
                 <div class="card-desc">Pengelompokan data tak berlabel dengan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
-        if st.button("🚀 Buka Modul Clustering", key="btn_nav_clu", use_container_width=True):
-            change_page("🔵 Clustering")
+        st.button("🚀 Modul Clustering", key="btn_nav_clu", use_container_width=True, on_click=change_page, args=("🔵 Clustering",))
 
     st.write("---")
     st.subheader("⚡ Status Server & Database")
@@ -461,7 +456,7 @@ def page_home():
                     {
                         "Modul Pemodelan": TASK_LABEL[task],
                         "Dataset": n,
-                        "Deskripsi Singkat": DATASET_DESC.get(n, "-"),
+                        "Deskripsi": DATASET_DESC.get(n, "-"),
                         "Data Tambahan (MongoDB)": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
                         "Model Biner Tersimpan": db.models.count_documents({"key": f"{task}:{n}"}),
                     }
