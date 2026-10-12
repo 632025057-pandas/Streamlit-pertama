@@ -391,7 +391,7 @@ def select_data(task, key_prefix):
 # ----------------------------------------------------------------------------
 def page_home():
     st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. ##TAS AI : Hana Meisaria 632025057")
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. <br>TAS AI : Hana Meisaria 632025057")
     st.write("")
 
     c1, c2, c3 = st.columns(3)
@@ -439,7 +439,22 @@ def page_home():
 
 def page_regresi():
     st.markdown('<h1 class="main-title-container">📈 <span class="gradient-text">Regresi Linear</span></h1>', unsafe_allow_html=True)
+    
+    # Deskripsi Singkat Modul
+    st.info(
+        "💡 **Deskripsi Modul Regresi Linear:**\n\n"
+        "Regresi Linear digunakan untuk memprediksi nilai variabel target berupa **angka kontinu** "
+        "berdasarkan hubungan garis lurus antara variabel independen (fitur) dan variabel dependen (target)."
+    )
+    
     name, df, n_extra, feats, tn = select_data("regresi", "reg")
+    
+    # Penjelasan singkat dataset yang dipilih
+    if name == "Diabetes":
+        st.caption("ℹ️ **Diabetes Dataset:** Memprediksi tingkat atau progres kuantitatif perkembangan penyakit diabetes dalam 1 tahun.")
+    elif name == "California Housing":
+        st.caption("ℹ️ **California Housing Dataset:** Memprediksi rata-rata harga rumah di wilayah California berdasarkan fitur geografis & demografis.")
+
     test_size = st.slider("Proporsi Data Uji (Test Size)", 0.1, 0.5, 0.2, 0.05, key="reg_ts")
     
     res = run_model("regresi", df, test_size=test_size)
@@ -481,14 +496,32 @@ def page_regresi():
             st.balloons()
             st.success(f"Hasil Prediksi Target: **{y:.4f}**")
 
-
 def page_klasifikasi():
     st.markdown('<h1 class="main-title-container">🧪 <span class="gradient-text">Klasifikasi Multi-Algoritma</span></h1>', unsafe_allow_html=True)
+    
+    # Deskripsi Singkat Modul
+    st.info(
+        "💡 **Deskripsi Modul Klasifikasi:**\n\n"
+        "Klasifikasi adalah teknik *supervised learning* untuk mengelompokkan data ke dalam **kategori/kelas diskrit** "
+        "yang sudah ditentukan berdasarkan korelasi pola fitur-fitur inputnya."
+    )
+    
     name, df, n_extra, feats, tn = select_data("klasifikasi", "clf")
+    
     c1, c2 = st.columns(2)
     model_name = c1.selectbox(
         "Pilih Algoritma ML", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="clf_model"
     )
+    
+    # Deskripsi singkat algoritma yang dipilih
+    algo_desc = {
+        "Random Forest": "🌲 **Random Forest:** Kombinasi banyak Decision Tree (*ensemble*) untuk prediksi yang stabil dan akurat.",
+        "Logistic Regression": "📐 **Logistic Regression:** Model linier probabilistik untuk mengukur peluang keanggotaan kelas.",
+        "KNN": "📍 **KNN (K-Nearest Neighbors):** Klasifikasi berdasarkan jarak terdekat (*similarity*) ke data tetangga.",
+        "Decision Tree": "🌿 **Decision Tree:** Struktur keputusan bercabang berdasarkan aturan pemisahan fitur."
+    }
+    st.caption(algo_desc[model_name])
+
     test_size = c2.slider("Proporsi Data Uji", 0.1, 0.5, 0.2, 0.05, key="clf_ts")
     
     res = run_model("klasifikasi", df, model_name=model_name, test_size=test_size)
@@ -527,9 +560,16 @@ def page_klasifikasi():
                 idx_labels = [tn[c] if tn else str(c) for c in res["model"].classes_]
                 st.bar_chart(pd.Series(proba, index=idx_labels))
 
-
 def page_clustering():
     st.markdown('<h1 class="main-title-container">🔵 <span class="gradient-text">Clustering K-Means</span></h1>', unsafe_allow_html=True)
+    
+    # Deskripsi Singkat Modul
+    st.info(
+        "💡 **Deskripsi Modul Clustering (Unsupervised Learning):**\n\n"
+        "Clustering bertujuan mengelompokkan data ke dalam **beberapa kelompok (cluster)** tanpa petunjuk label awal, "
+        "sehingga data yang berada dalam satu cluster memiliki karakteristik yang mirip satu sama lain."
+    )
+    
     name, df, n_extra, feats, tn = select_data("clustering", "clu")
     k = st.slider("Jumlah Cluster (k)", 2, 10, 3, key="clu_k")
     
@@ -568,7 +608,6 @@ def page_clustering():
         if st.button("🚀 Tentukan Cluster", key="clu_btn", type="primary"):
             Xn = res["scaler"].transform(pd.DataFrame([vals], columns=feats))
             st.success(f"Data Tersebut Masuk ke **Cluster {int(res['model'].predict(Xn)[0])}**")
-
 
 def page_retrain():
     st.markdown('<h1 class="main-title-container">🔁 <span class="gradient-text">Management Data & Retraining</span></h1>', unsafe_allow_html=True)
