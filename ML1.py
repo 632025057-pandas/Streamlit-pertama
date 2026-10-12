@@ -391,7 +391,7 @@ def select_data(task, key_prefix):
 # ----------------------------------------------------------------------------
 def page_home():
     st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. <br>TAS AI : Hana Meisaria 632025057")
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.<br>TAS AI : Hana Meisaria 632025057",unsafe_allow_html=True)
     st.write("")
 
     c1, c2, c3 = st.columns(3)
