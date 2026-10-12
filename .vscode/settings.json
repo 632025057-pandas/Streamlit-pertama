@@ -1,0 +1,12 @@
+{
+    "python.defaultInterpreterPath": "D:\\Hana - Sains Data\\PYTHON\\PYTHON_ENV\\pyenv3129_1\\Scripts\\python.exe",
+"python.terminal.activateEnvironment": true,
+"python.terminal.activateEnvInCurrentTerminal": true,
+"terminal.integrated.defaultProfile.windows": "Command Prompt",
+"terminal.integrated.profiles.windows": {
+"Command Prompt": {
+"path": "C:\\Windows\\System32\\cmd.exe",
+"args": ["/K", "D:\\Hana - Sains Data\\PYTHON\\PYTHON_ENV\\pyenv3129_1\\Scripts\\activate.bat"]
+}
+}
+}
