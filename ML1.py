@@ -1,10 +1,11 @@
 """
 TAS AI - Hana Meisaria
 Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
-+ Integrasi MongoDB (dataset tambahan, retraining, komentar publik)
++ Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
 Sumber data: scikit-learn (Diabetes, Iris, Wine)
 """
 import os
+import pickle
 from datetime import datetime, timedelta, timezone
 
 import matplotlib.pyplot as plt
@@ -36,10 +37,91 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
-st.set_page_config(page_title="TAS AI - Hana Meisaria", page_icon="🤖", layout="wide")
+# Konfigurasi Halaman dengan Icon Student
+st.set_page_config(
+    page_title="TAS AI - Hana Meisaria", 
+    page_icon="👩‍🎓", 
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # ----------------------------------------------------------------------------
-# Konfigurasi dataset (semua dari scikit-learn)
+# Custom CSS untuk UI/UX Lebih Modern
+# ----------------------------------------------------------------------------
+st.markdown("""
+    <style>
+    /* Styling Container Utama */
+    .stApp {
+        background-color: #0e1117;
+    }
+    
+    /* Header Title Modern */
+    .main-title {
+        background: linear-gradient(90deg, #4F46E5, #06B6D4);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        font-weight: 800;
+        font-size: 2.5rem;
+        margin-bottom: 0.2rem;
+    }
+    
+    /* Card Dashboard Styling */
+    .custom-card {
+        background-color: #1f2937;
+        border-radius: 12px;
+        padding: 20px;
+        border: 1px solid #374151;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        margin-bottom: 15px;
+    }
+    .custom-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
+        border-color: #4F46E5;
+    }
+    .card-title {
+        color: #f3f4f6;
+        font-size: 1.1rem;
+        font-weight: 600;
+        margin-bottom: 8px;
+    }
+    .card-desc {
+        color: #9ca3af;
+        font-size: 0.9rem;
+    }
+    
+    /* Metric Card Customization */
+    [data-testid="stMetricValue"] {
+        font-size: 1.8rem;
+        font-weight: 700;
+        color: #38bdf8;
+    }
+    [data-testid="stMetric"] {
+        background-color: #1e293b;
+        border: 1px solid #334155;
+        padding: 12px 16px;
+        border-radius: 10px;
+    }
+
+    /* Style Tab */
+    .stTabs [data-baseweb="tab-list"] {
+        gap: 8px;
+    }
+    .stTabs [data-baseweb="tab"] {
+        border-radius: 8px;
+        padding: 8px 16px;
+        background-color: #1e293b;
+    }
+    .stTabs [aria-selected="true"] {
+        background-color: #4f46e5 !important;
+        color: white !important;
+    }
+    </style>
+""", unsafe_allow_html=True)
+
+# ----------------------------------------------------------------------------
+# Konfigurasi Dataset
 # ----------------------------------------------------------------------------
 LOADERS = {"Diabetes": load_diabetes, "Iris": load_iris, "Wine": load_wine}
 TASK_DATASETS = {
@@ -53,9 +135,8 @@ TASK_LABEL = {
     "clustering": "Clustering",
 }
 
-
 # ----------------------------------------------------------------------------
-# MongoDB
+# MongoDB Connection
 # ----------------------------------------------------------------------------
 def _secret(name, default=None):
     try:
@@ -66,10 +147,10 @@ def _secret(name, default=None):
 
 @st.cache_resource
 def init_db():
-    # Memasukkan URL koneksi MongoDB secara langsung
-    uri = "mongodb://632025057:632025057_Hana@ac-z4y3rlw-shard-00-00.n0apbrv.mongodb.net:27017,ac-z4y3rlw-shard-00-01.n0apbrv.mongodb.net:27017,ac-z4y3rlw-shard-00-02.n0apbrv.mongodb.net:27017/?ssl=true&replicaSet=atlas-ikculp-shard-0&authSource=admin&appName=Cluster0"
+    fallback_uri = "mongodb://632025057:632025057_Hana@ac-z4y3rlw-shard-00-00.n0apbrv.mongodb.net:27017,ac-z4y3rlw-shard-00-01.n0apbrv.mongodb.net:27017,ac-z4y3rlw-shard-00-02.n0apbrv.mongodb.net:27017/?ssl=true&replicaSet=atlas-ikculp-shard-0&authSource=admin&appName=Cluster0"
+    uri = _secret("MONGODB_URI", fallback_uri)
     if not uri:
-        return None, "MONGODB_URI belum diatur ."
+        return None, "MONGODB_URI belum diatur."
     try:
         client = MongoClient(uri, serverSelectionTimeoutMS=5000)
         client.admin.command("ping")
@@ -86,8 +167,28 @@ def now_wib(dt):
 
 
 # ----------------------------------------------------------------------------
-# Data helpers
+# Data & Model Helpers
 # ----------------------------------------------------------------------------
+def save_model_to_db(task, dataset_name, model_obj, model_name, metrics):
+    if db is None:
+        return False
+    try:
+        model_bytes = pickle.dumps(model_obj)
+        doc = {
+            "key": f"{task}:{dataset_name}",
+            "task": task,
+            "dataset": dataset_name,
+            "model_name": model_name,
+            "model_bytes": model_bytes,
+            "metrics": metrics,
+            "created_at": datetime.now(timezone.utc),
+        }
+        db.models.insert_one(doc)
+        return True
+    except Exception:  # noqa: BLE001
+        return False
+
+
 @st.cache_data
 def load_base(name):
     d = LOADERS[name](as_frame=True)
@@ -114,7 +215,6 @@ def get_extra(task, name, feats):
 
 
 def get_training_df(task, name, use_extra=True):
-    """Gabungkan dataset sklearn + data tambahan dari MongoDB."""
     base, feats, tn = load_base(name)
     extra = get_extra(task, name, feats) if use_extra else pd.DataFrame(columns=feats + ["target"])
     if task != "clustering":
@@ -164,7 +264,7 @@ def feature_inputs(base, feats, prefix, ncols=3):
 
 
 # ----------------------------------------------------------------------------
-# Model
+# Model Training
 # ----------------------------------------------------------------------------
 def make_classifier(model_name, seed):
     return {
@@ -177,8 +277,6 @@ def make_classifier(model_name, seed):
 
 @st.cache_resource(show_spinner=False)
 def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42):
-    """Latih model & hitung metrik. Di-cache berdasarkan isi df,
-    sehingga otomatis dilatih ulang saat ada data tambahan."""
     if task == "regresi":
         X, y = df.drop(columns="target"), df["target"]
         Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=seed)
@@ -187,7 +285,7 @@ def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42)
         return {
             "model": m,
             "metrics": {
-                "R2": r2_score(yte, pred),
+                "R2 Score": r2_score(yte, pred),
                 "MAE": mean_absolute_error(yte, pred),
                 "RMSE": mean_squared_error(yte, pred) ** 0.5,
             },
@@ -209,9 +307,9 @@ def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42)
             "model": m,
             "metrics": {
                 "Accuracy": accuracy_score(yte, pred),
-                "Precision (macro)": precision_score(yte, pred, average="macro", zero_division=0),
-                "Recall (macro)": recall_score(yte, pred, average="macro", zero_division=0),
-                "F1 (macro)": f1_score(yte, pred, average="macro", zero_division=0),
+                "Precision": precision_score(yte, pred, average="macro", zero_division=0),
+                "Recall": recall_score(yte, pred, average="macro", zero_division=0),
+                "F1 Score": f1_score(yte, pred, average="macro", zero_division=0),
             },
             "cm": confusion_matrix(yte, pred, labels=classes),
             "classes": classes,
@@ -219,7 +317,7 @@ def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42)
             "n_test": len(Xte),
         }
 
-    # clustering
+    # Clustering
     X = df.drop(columns="target", errors="ignore")
     sc = StandardScaler().fit(X)
     Xs = sc.transform(X)
@@ -265,165 +363,206 @@ def select_data(task, key_prefix):
         key=f"{key_prefix}_extra",
     )
     df, n_extra, feats, tn = get_training_df(task, name, use_extra and db is not None)
-    st.caption(f"Total data training: **{len(df)}** baris (data tambahan dari pengguna: **{n_extra}**)")
+    st.caption(f"📊 Total Data Latih: **{len(df)}** baris (Data Tambahan Pengguna: **{n_extra}**)")
     return name, df, n_extra, feats, tn
 
 
 # ----------------------------------------------------------------------------
-# Halaman
+# Halaman Dashboard
 # ----------------------------------------------------------------------------
 def page_home():
-    st.title("🤖 Tugas Akhir AI: Aplikasi Machine Learning")
-    st.write(
-        "Aplikasi ini memuat tiga jenis pemodelan (**Regresi Linear**, **Klasifikasi**, "
-        "**Clustering**) dengan dataset dari **scikit-learn**. Pengguna dapat menambah data "
-        "baru ke **MongoDB**, melakukan **retraining**, dan meninggalkan **komentar**."
-    )
-    c1, c2, c3 = st.columns(3)
-    c1.info("**Regresi Linear**\n\nDiabetes: prediksi progres penyakit")
-    c2.info("**Klasifikasi**\n\nIris / Wine: prediksi kelas")
-    c3.info("**Clustering**\n\nK-Means pada Iris / Wine")
+    st.markdown('<h1 class="main-title">👩‍🎓 Dashboard Machine Learning</h1>', unsafe_allow_html=True)
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.")
+    st.write("")
 
-    st.subheader("Status")
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        st.markdown('''
+            <div class="custom-card">
+                <div class="card-title">📈 Regresi Linear</div>
+                <div class="card-desc">Prediksi progres penyakit menggunakan dataset Diabetes.</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    with c2:
+        st.markdown('''
+            <div class="custom-card">
+                <div class="card-title">🧪 Klasifikasi Multi-Algoritma</div>
+                <div class="card-desc">Prediksi kelas varietas menggunakan dataset Iris & Wine.</div>
+            </div>
+        ''', unsafe_allow_html=True)
+    with c3:
+        st.markdown('''
+            <div class="custom-card">
+                <div class="card-title">🔵 Clustering K-Means</div>
+                <div class="card-desc">Pengelompokan pola data tak berlabel dengan visualisasi PCA.</div>
+            </div>
+        ''', unsafe_allow_html=True)
+
+    st.subheader("⚡ Status Server & Database")
     if db is None:
-        st.warning(f"MongoDB belum terhubung: {db_error}")
+        st.error(f"MongoDB belum terhubung: {db_error}")
     else:
-        st.success("MongoDB terhubung.")
+        st.success("MongoDB Atlas terhubung aktif.")
         rows = []
         for task, names in TASK_DATASETS.items():
             for n in names:
                 rows.append(
                     {
-                        "Modul": TASK_LABEL[task],
+                        "Modul Pemodelan": TASK_LABEL[task],
                         "Dataset": n,
-                        "Data tambahan": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
+                        "Data Tambahan (MongoDB)": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
+                        "Model Biner Tersimpan": db.models.count_documents({"key": f"{task}:{n}"}),
                     }
                 )
-        st.dataframe(pd.DataFrame(rows), hide_index=True, width="stretch")
-        st.caption(f"Jumlah komentar: {db.komentar.count_documents({})}")
+        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+        st.caption(f"💬 Total Komentar Publik Tersimpan: **{db.komentar.count_documents({})}**")
 
 
 def page_regresi():
-    st.title("📈 Regresi Linear")
+    st.markdown('<h1 class="main-title">📈 Regresi Linear</h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("regresi", "reg")
-    test_size = st.slider("Proporsi data uji", 0.1, 0.5, 0.2, 0.05, key="reg_ts")
+    test_size = st.slider("Proporsi Data Uji (Test Size)", 0.1, 0.5, 0.2, 0.05, key="reg_ts")
+    
     res = run_model("regresi", df, test_size=test_size)
     show_metrics(res["metrics"])
+    st.write("")
 
-    t1, t2, t3 = st.tabs(["Dataset", "Hasil Model", "Prediksi"])
+    t1, t2, t3 = st.tabs(["📊 Dataset Overview", "📈 Grafik & Koefisien Model", "🔮 Simulator Prediksi"])
     with t1:
-        st.dataframe(df.tail(20) if n_extra else df.head(20), width="stretch")
+        st.dataframe(df.tail(20) if n_extra else df.head(20), use_container_width=True)
+        st.write("**Deskripsi Statistik Dataset:**")
         st.write(df.describe().T)
     with t2:
         c1, c2 = st.columns(2)
-        fig, ax = plt.subplots(figsize=(5, 4))
-        ax.scatter(res["y_test"], res["pred"], alpha=0.7)
+        fig, ax = plt.subplots(figsize=(6, 4.5))
+        fig.patch.set_facecolor('#111827')
+        ax.set_facecolor('#1f2937')
+        ax.scatter(res["y_test"], res["pred"], alpha=0.7, color='#38bdf8', edgecolors='none')
         lim = [min(res["y_test"].min(), res["pred"].min()), max(res["y_test"].max(), res["pred"].max())]
-        ax.plot(lim, lim, "r--")
-        ax.set_xlabel("Aktual")
-        ax.set_ylabel("Prediksi")
-        ax.set_title("Aktual vs Prediksi (data uji)")
+        ax.plot(lim, lim, "--", color='#f43f5e', linewidth=2)
+        ax.set_xlabel("Nilai Aktual", color='#9ca3af')
+        ax.set_ylabel("Nilai Prediksi", color='#9ca3af')
+        ax.set_title("Aktual vs Prediksi (Data Uji)", color='#f3f4f6')
+        ax.tick_params(colors='#9ca3af')
+        for spine in ax.spines.values():
+            spine.set_color('#374151')
         c1.pyplot(fig)
+
         coef = pd.DataFrame({"Fitur": feats, "Koefisien": res["model"].coef_})
-        c2.write("**Koefisien regresi**")
-        c2.dataframe(coef, hide_index=True, width="stretch")
-        c2.caption(f"Intercept: {res['model'].intercept_:.4f}")
+        c2.write("**Koefisien Bobot Regresi:**")
+        c2.dataframe(coef, hide_index=True, use_container_width=True)
+        c2.caption(f"Intercept Nilai Konstan: **{res['model'].intercept_:.4f}**")
+
     with t3:
         base = load_base(name)[0]
-        st.write("Masukkan nilai fitur (sudah dalam skala dataset sklearn):")
+        st.markdown("##### Input Nilai Fitur untuk Menguji Prediksi:")
         vals = feature_inputs(base, feats, "reg_pred")
-        if st.button("Prediksi", key="reg_btn"):
+        if st.button("🚀 Jalankan Prediksi", key="reg_btn", type="primary"):
             y = res["model"].predict(pd.DataFrame([vals], columns=feats))[0]
-            st.success(f"Prediksi progres penyakit: **{y:.2f}**")
+            st.balloons()
+            st.success(f"Hasil Prediksi Progres Penyakit: **{y:.2f}**")
 
 
 def page_klasifikasi():
-    st.title("🧪 Klasifikasi")
+    st.markdown('<h1 class="main-title">🧪 Klasifikasi Multi-Algoritma</h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("klasifikasi", "clf")
     c1, c2 = st.columns(2)
     model_name = c1.selectbox(
-        "Algoritma", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="clf_model"
+        "Pilih Algoritma ML", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="clf_model"
     )
-    test_size = c2.slider("Proporsi data uji", 0.1, 0.5, 0.2, 0.05, key="clf_ts")
+    test_size = c2.slider("Proporsi Data Uji", 0.1, 0.5, 0.2, 0.05, key="clf_ts")
+    
     res = run_model("klasifikasi", df, model_name=model_name, test_size=test_size)
     show_metrics(res["metrics"])
+    st.write("")
 
-    t1, t2, t3 = st.tabs(["Dataset", "Hasil Model", "Prediksi"])
+    t1, t2, t3 = st.tabs(["📊 Distribusi Data", "🎯 Confusion Matrix", "🔮 Simulator Prediksi"])
     with t1:
         show = df.copy()
         show["kelas"] = show["target"].map(lambda i: tn[int(i)])
-        st.dataframe(show.tail(20) if n_extra else show.head(20), width="stretch")
+        st.dataframe(show.tail(20) if n_extra else show.head(20), use_container_width=True)
         st.bar_chart(show["kelas"].value_counts())
     with t2:
         fig, ax = plt.subplots(figsize=(5, 4))
-        ConfusionMatrixDisplay(res["cm"], display_labels=[tn[c] for c in res["classes"]]).plot(
-            ax=ax, colorbar=False
-        )
-        ax.set_title("Confusion Matrix (data uji)")
+        fig.patch.set_facecolor('#111827')
+        ax.set_facecolor('#1f2937')
+        cm_display = ConfusionMatrixDisplay(res["cm"], display_labels=[tn[c] for c in res["classes"]])
+        cm_display.plot(ax=ax, colorbar=False, cmap='plasma')
+        ax.set_title(f"Confusion Matrix ({model_name})", color='#f3f4f6')
+        ax.tick_params(colors='#9ca3af')
         st.pyplot(fig)
     with t3:
         base = load_base(name)[0]
+        st.markdown("##### Input Nilai Fitur:")
         vals = feature_inputs(base, feats, "clf_pred")
-        if st.button("Prediksi", key="clf_btn"):
+        if st.button("🚀 Prediksi Kelas", key="clf_btn", type="primary"):
             Xn = pd.DataFrame([vals], columns=feats)
             pred = int(res["model"].predict(Xn)[0])
-            st.success(f"Prediksi kelas: **{tn[pred]}**")
+            st.balloons()
+            st.success(f"Hasil Prediksi Kelas: **{tn[pred]}**")
             if hasattr(res["model"], "predict_proba"):
                 proba = res["model"].predict_proba(Xn)[0]
+                st.caption("Distribusi Probabilitas Prediksi:")
                 st.bar_chart(pd.Series(proba, index=[tn[c] for c in res["model"].classes_]))
 
 
 def page_clustering():
-    st.title("🔵 Clustering (K-Means)")
+    st.markdown('<h1 class="main-title">🔵 Clustering K-Means</h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("clustering", "clu")
-    k = st.slider("Jumlah cluster (k)", 2, 10, 3, key="clu_k")
+    k = st.slider("Jumlah Cluster (k)", 2, 10, 3, key="clu_k")
+    
     res = run_model("clustering", df, k=k)
     show_metrics(res["metrics"])
+    st.write("")
 
-    t1, t2, t3 = st.tabs(["Visualisasi", "Profil Cluster", "Prediksi Cluster"])
+    t1, t2, t3 = st.tabs(["Visualisasi Cluster (PCA)", "📊 Profiling Cluster", "🔮 Prediksi Cluster Data Baru"])
     with t1:
         c1, c2 = st.columns(2)
         fig, ax = plt.subplots(figsize=(5, 4))
-        sc = ax.scatter(res["pca"][:, 0], res["pca"][:, 1], c=res["labels"], cmap="viridis", s=25)
-        ax.set_xlabel("PC1")
-        ax.set_ylabel("PC2")
-        ax.set_title(f"K-Means k={k} (proyeksi PCA)")
-        ax.legend(*sc.legend_elements(), title="Cluster")
+        fig.patch.set_facecolor('#111827')
+        ax.set_facecolor('#1f2937')
+        sc = ax.scatter(res["pca"][:, 0], res["pca"][:, 1], c=res["labels"], cmap="viridis", s=35, alpha=0.9)
+        ax.set_xlabel("Principal Component 1 (PC1)", color='#9ca3af')
+        ax.set_ylabel("Principal Component 2 (PC2)", color='#9ca3af')
+        ax.set_title(f"Proyeksi K-Means (k={k})", color='#f3f4f6')
+        ax.tick_params(colors='#9ca3af')
         c1.pyplot(fig)
-        c2.write("**Elbow & Silhouette** (k = 2..10)")
+
+        c2.write("**Evaluasi Jumlah Cluster (Elbow & Silhouette):**")
         ed = elbow_data(df)
         c2.line_chart(ed["Inertia"])
         c2.line_chart(ed["Silhouette"])
     with t2:
         X = df.drop(columns="target", errors="ignore").copy()
         X["cluster"] = res["labels"]
-        st.write("Jumlah anggota per cluster")
+        st.write("**Jumlah Anggota per Cluster:**")
         st.bar_chart(X["cluster"].value_counts().sort_index())
-        st.write("Rata-rata fitur per cluster")
-        st.dataframe(X.groupby("cluster").mean(), width="stretch")
+        st.write("**Nilai Rata-rata Fitur per Cluster:**")
+        st.dataframe(X.groupby("cluster").mean(), use_container_width=True)
     with t3:
         base = load_base(name)[0]
+        st.markdown("##### Input Nilai Fitur:")
         vals = feature_inputs(base, feats, "clu_pred")
-        if st.button("Tentukan cluster", key="clu_btn"):
+        if st.button("🚀 Tentukan Cluster", key="clu_btn", type="primary"):
             Xn = res["scaler"].transform(pd.DataFrame([vals], columns=feats))
-            st.success(f"Data masuk ke **cluster {int(res['model'].predict(Xn)[0])}**")
+            st.success(f"Data Tersebut Masuk ke **Cluster {int(res['model'].predict(Xn)[0])}**")
 
 
 def page_retrain():
-    st.title("🔁 Update Dataset & Retraining")
+    st.markdown('<h1 class="main-title">🔁 Management Data & Retraining</h1>', unsafe_allow_html=True)
     if db is None:
-        st.error(f"Fitur ini membutuhkan MongoDB. Status: {db_error}")
+        st.error(f"Fitur ini membutuhkan koneksi MongoDB Atlas. Status: {db_error}")
         return
 
     c1, c2 = st.columns(2)
-    task = c1.selectbox("Modul", list(TASK_LABEL), format_func=TASK_LABEL.get, key="rt_task")
-    name = c2.selectbox("Dataset", TASK_DATASETS[task], key="rt_ds")
+    task = c1.selectbox("Modul Pemodelan", list(TASK_LABEL), format_func=TASK_LABEL.get, key="rt_task")
+    name = c2.selectbox("Dataset Tujuan", TASK_DATASETS[task], key="rt_ds")
     base, feats, tn = load_base(name)
     key = f"{task}:{name}"
     n_extra = db.dataset_tambahan.count_documents({"key": key})
-    st.caption(f"Data asli sklearn: **{len(base)}** baris | Data tambahan di MongoDB: **{n_extra}** baris")
+    st.caption(f"📁 Data Asli Sklearn: **{len(base)}** baris | 📥 Data Tambahan MongoDB: **{n_extra}** baris")
 
-    t1, t2, t3, t4 = st.tabs(["➕ Input Manual", "📄 Upload CSV", "🗂️ Data Tambahan", "🔁 Retraining"])
+    t1, t2, t3, t4 = st.tabs(["➕ Input Manual Data", "📄 Upload Berkas CSV", "🗂️ Kelola Data Tambahan", "🔁 Retraining Model ML"])
 
     with t1:
         with st.form("form_manual", clear_on_submit=False):
@@ -431,36 +570,34 @@ def page_retrain():
             target = None
             if task == "regresi":
                 target = st.number_input(
-                    "Target (progres penyakit)",
+                    "Target Value",
                     value=float(base["target"].median()),
                     key="rt_man_target",
                 )
             elif task == "klasifikasi":
-                label = st.selectbox("Kelas (target)", tn, key="rt_man_label")
+                label = st.selectbox("Label Kelas (Target)", tn, key="rt_man_label")
                 target = tn.index(label)
-            if st.form_submit_button("Simpan ke MongoDB"):
+            if st.form_submit_button("💾 Simpan Baris Data ke MongoDB"):
                 insert_rows(task, name, [(vals, target)], "manual")
-                st.success("Data tersimpan. Buka tab Retraining untuk melatih ulang model.")
+                st.success("Data baru berhasil disimpan ke MongoDB! Buka tab Retraining untuk melatih ulang model.")
                 st.rerun()
 
     with t2:
         cols_needed = feats + (["target"] if task != "clustering" else [])
-        st.write("Kolom CSV harus persis:", ", ".join(cols_needed))
-        if task == "klasifikasi":
-            st.caption(f"Kolom target boleh berisi indeks (0..{len(tn) - 1}) atau nama kelas: {tn}")
+        st.write("Struktur Kolom CSV yang Diperlukan:", ", ".join(cols_needed))
         st.download_button(
-            "Unduh template CSV",
+            "📥 Unduh Template Format CSV",
             base[cols_needed].head(3).to_csv(index=False),
             file_name=f"template_{name.lower()}.csv",
             mime="text/csv",
         )
-        up = st.file_uploader("Upload CSV", type="csv", key="rt_csv")
+        up = st.file_uploader("Upload File CSV Data Baru", type="csv", key="rt_csv")
         if up is not None:
             try:
                 new = pd.read_csv(up)
                 missing = [c for c in cols_needed if c not in new.columns]
                 if missing:
-                    st.error(f"Kolom kurang: {missing}")
+                    st.error(f"Format Kolom Kurang Tepat: {missing}")
                 else:
                     new = new[cols_needed].dropna()
                     if task == "klasifikasi" and new["target"].dtype == object:
@@ -468,57 +605,56 @@ def page_retrain():
                         new = new.dropna()
                     for c in cols_needed:
                         new[c] = pd.to_numeric(new[c], errors="raise")
-                    st.dataframe(new.head(), width="stretch")
-                    st.write(f"{len(new)} baris valid.")
-                    if st.button("Simpan semua ke MongoDB", key="rt_csv_btn"):
+                    st.dataframe(new.head(), use_container_width=True)
+                    st.write(f"✓ Terbaca **{len(new)}** baris data valid.")
+                    if st.button("💾 Unggah Semua Baris ke MongoDB", key="rt_csv_btn", type="primary"):
                         rows = [
                             (r[feats].tolist(), r["target"] if task != "clustering" else None)
                             for _, r in new.iterrows()
                         ]
                         n = insert_rows(task, name, rows, "csv")
-                        st.success(f"{n} baris tersimpan.")
+                        st.success(f"{n} baris data berhasil disimpan ke MongoDB.")
                         st.rerun()
             except Exception as e:  # noqa: BLE001
-                st.error(f"Gagal membaca CSV: {e}")
+                st.error(f"Gagal membaca file CSV: {e}")
 
     with t3:
         extra = get_extra(task, name, feats)
         if extra.empty:
-            st.info("Belum ada data tambahan.")
+            st.info("Belum ada data tambahan tersimpan untuk dataset ini.")
         else:
-            st.dataframe(extra, width="stretch")
+            st.dataframe(extra, use_container_width=True)
         if n_extra:
-            if st.checkbox("Saya yakin ingin menghapus semua data tambahan dataset ini", key="rt_del_ok"):
-                if st.button("Hapus data tambahan", key="rt_del"):
+            if st.checkbox("Konfirmasi reset / hapus seluruh data tambahan dataset ini", key="rt_del_ok"):
+                if st.button("🗑️ Hapus Data Tambahan", key="rt_del", type="primary"):
                     db.dataset_tambahan.delete_many({"key": key})
                     st.rerun()
 
     with t4:
         params = {}
+        model_name_selected = "Linear Regression"
         if task == "klasifikasi":
-            params["model_name"] = st.selectbox(
-                "Algoritma", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="rt_algo"
+            model_name_selected = st.selectbox(
+                "Algoritma Evaluasi", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="rt_algo"
             )
-        if task == "clustering":
-            params["k"] = st.slider("Jumlah cluster (k)", 2, 10, 3, key="rt_k")
-        st.write(
-            "Retraining membandingkan model yang dilatih dengan **data asli saja** "
-            "dan model yang dilatih dengan **data asli + data tambahan**."
-        )
-        if st.button("🚀 Retrain model", type="primary", key="rt_go"):
+            params["model_name"] = model_name_selected
+        elif task == "clustering":
+            model_name_selected = "K-Means"
+            params["k"] = st.slider("Jumlah Cluster (k)", 2, 10, 3, key="rt_k")
+
+        st.markdown("Komparasi performa model yang dilatih dengan **Data Asli** vs **Data Asli + Tambahan**:")
+        if st.button("🚀 Eksekusi Retraining & Simpan Model Biner", type="primary", key="rt_go"):
             if n_extra == 0:
-                st.warning("Belum ada data tambahan; hasil retraining akan sama dengan model awal.")
+                st.warning("Belum ada data tambahan tersimpan; hasil metrik sebelum & sesudah akan persis sama.")
             df_new, n_e, _, _ = get_training_df(task, name, True)
             before = run_model(task, base, **params)
             after = run_model(task, df_new, **params)
             cmp = pd.DataFrame(
-                {"Sebelum (data asli)": before["metrics"], "Sesudah (asli + tambahan)": after["metrics"]}
+                {"Sebelum (Data Asli)": before["metrics"], "Sesudah (Asli + Tambahan)": after["metrics"]}
             )
-            st.dataframe(cmp.style.format("{:.4f}"), width="stretch")
-            st.caption(
-                f"Data latih sebelum: {before['n_train']} | sesudah: {after['n_train']} "
-                "(pembagian train/test berbeda karena jumlah data berubah)."
-            )
+            st.dataframe(cmp.style.format("{:.4f}"), use_container_width=True)
+            
+            # Simpan Riwayat
             db.riwayat_training.insert_one(
                 {
                     "key": key,
@@ -530,39 +666,50 @@ def page_retrain():
                     "metrik_sesudah": {k: float(v) for k, v in after["metrics"].items()},
                 }
             )
-            st.success("Retraining selesai & tercatat di riwayat. Halaman model kini memakai data terbaru.")
+            
+            # Simpan Model Biner Objek ke MongoDB
+            saved = save_model_to_db(
+                task=task,
+                dataset_name=name,
+                model_obj=after["model"],
+                model_name=model_name_selected,
+                metrics={k: float(v) for k, v in after["metrics"].items()}
+            )
+            if saved:
+                st.balloons()
+                st.success("Retraining Selesai! Model ML biner terbaru berhasil diperbarui di MongoDB Atlas.")
 
         hist = list(db.riwayat_training.find({"key": key}).sort("waktu", -1).limit(10))
         if hist:
-            st.write("**Riwayat retraining (10 terakhir)**")
+            st.write("**Riwayat Retraining Terakhir:**")
             st.dataframe(
                 pd.DataFrame(
                     [
                         {
                             "Waktu": now_wib(h["waktu"]),
-                            "Data tambahan": h["n_tambahan"],
-                            **{f"{k} (baru)": round(v, 4) for k, v in h["metrik_sesudah"].items()},
+                            "Jumlah Data Tambahan": h["n_tambahan"],
+                            **{f"{k} (Baru)": round(v, 4) for k, v in h["metrik_sesudah"].items()},
                         }
                         for h in hist
                     ]
                 ),
                 hide_index=True,
-                width="stretch",
+                use_container_width=True,
             )
 
 
 def page_komentar():
-    st.title("💬 Komentar")
+    st.markdown('<h1 class="main-title">💬 Diskusi & Komentar Publik</h1>', unsafe_allow_html=True)
     if db is None:
-        st.error(f"Fitur ini membutuhkan MongoDB. Status: {db_error}")
+        st.error(f"Fitur ini membutuhkan koneksi MongoDB. Status: {db_error}")
         return
 
     with st.form("form_komentar", clear_on_submit=True):
-        nama = st.text_input("Nama", max_chars=50)
-        isi = st.text_area("Komentar", max_chars=500)
-        if st.form_submit_button("Kirim"):
+        nama = st.text_input("Nama Anda", max_chars=50)
+        isi = st.text_area("Tuliskan Komentar / Masukan Anda", max_chars=500)
+        if st.form_submit_button("🚀 Kirim Komentar"):
             if not nama.strip() or not isi.strip():
-                st.warning("Nama dan komentar wajib diisi.")
+                st.warning("Mohon isi Nama dan Komentar terlebih dahulu.")
             else:
                 db.komentar.insert_one(
                     {
@@ -571,12 +718,12 @@ def page_komentar():
                         "created_at": datetime.now(timezone.utc),
                     }
                 )
-                st.success("Terima kasih, komentar Anda tersimpan!")
+                st.success("Terima kasih! Komentar Anda berhasil tersimpan di database MongoDB.")
 
-    st.subheader("Komentar Pengunjung")
+    st.subheader("💬 Tanggapan & Komentar Pengunjung")
     docs = list(db.komentar.find().sort("created_at", -1).limit(50))
     if not docs:
-        st.info("Belum ada komentar. Jadilah yang pertama!")
+        st.info("Belum ada komentar tersimpan. Jadilah yang pertama!")
     for d in docs:
         with st.chat_message("user"):
             st.markdown(f"**{d['nama']}** · _{now_wib(d['created_at'])}_")
@@ -584,26 +731,27 @@ def page_komentar():
 
 
 # ----------------------------------------------------------------------------
-# Navigasi
+# Sidebar & Router Navigasi
 # ----------------------------------------------------------------------------
 PAGES = {
-    "🏠 Beranda": page_home,
+    "🏠 Dashboard Beranda": page_home,
     "📈 Regresi Linear": page_regresi,
     "🧪 Klasifikasi": page_klasifikasi,
     "🔵 Clustering": page_clustering,
-    "🔁 Update Dataset & Retraining": page_retrain,
-    "💬 Komentar": page_komentar,
+    "🔁 Update Data & Retraining": page_retrain,
+    "💬 Diskusi Komentar": page_komentar,
 }
 
-st.sidebar.title("Menu")
+st.sidebar.markdown("### 👩‍🎓 Menu Navigasi")
 choice = st.sidebar.radio("Navigasi", list(PAGES), label_visibility="collapsed")
 st.sidebar.divider()
+
 if db is None:
-    st.sidebar.error("MongoDB: tidak terhubung")
-    if st.sidebar.button("Coba sambung ulang"):
+    st.sidebar.error("🔴 MongoDB: Tidak Terhubung")
+    if st.sidebar.button("Coba Sambung Ulang"):
         init_db.clear()
         st.rerun()
 else:
-    st.sidebar.success("MongoDB: terhubung")
+    st.sidebar.success("🟢 MongoDB: Terhubung")
 
 PAGES[choice]()
