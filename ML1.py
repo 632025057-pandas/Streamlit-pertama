@@ -1,5 +1,5 @@
 """
-TAS AI - Hana Meisaria
+TAS AI - Hana Meisaria (NIM 632025057)
 Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
 Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
@@ -52,21 +52,28 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------------------------
-# Custom CSS untuk UI/UX Modern
+# Custom CSS untuk UI/UX Modern & Warna Emoji Asli
 # ----------------------------------------------------------------------------
 st.markdown("""
     <style>
     .stApp {
         background-color: #0e1117;
     }
-    .main-title {
+    
+    /* Teks Gradasi (Tanpa mempengaruhi emoji di luarnya) */
+    .gradient-text {
         background: linear-gradient(90deg, #4F46E5, #06B6D4);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
         font-weight: 800;
+    }
+    
+    .main-title-container {
         font-size: 2.5rem;
+        font-weight: 800;
         margin-bottom: 0.2rem;
     }
+
     .custom-card {
         background-color: #1f2937;
         border-radius: 12px;
@@ -118,7 +125,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
-# Konfigurasi Multi-Dataset (2-3 Dataset per Modul)
+# Konfigurasi Multi-Dataset
 # ----------------------------------------------------------------------------
 LOADERS = {
     "Diabetes": load_diabetes,
@@ -201,7 +208,6 @@ def load_base(name):
     tn = getattr(d, "target_names", None)
     tn = [str(x) for x in tn] if tn is not None else None
     
-    # Batasi dataset California Housing atau Breast Cancer agar fitur tidak terlalu banyak di UI
     if name == "California Housing":
         feats = feats[:6]
     elif name == "Breast Cancer":
@@ -384,8 +390,8 @@ def select_data(task, key_prefix):
 # Halaman Dashboard
 # ----------------------------------------------------------------------------
 def page_home():
-    st.markdown('<h1 class="main-title">🧠🤖 Dashboard Machine Learning</h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. TAS AI : Hana Meisaria 632025057")
+    st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. ##TAS AI : Hana Meisaria 632025057")
     st.write("")
 
     c1, c2, c3 = st.columns(3)
@@ -432,7 +438,7 @@ def page_home():
 
 
 def page_regresi():
-    st.markdown('<h1 class="main-title">📈 Regresi Linear</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">📈 <span class="gradient-text">Regresi Linear</span></h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("regresi", "reg")
     test_size = st.slider("Proporsi Data Uji (Test Size)", 0.1, 0.5, 0.2, 0.05, key="reg_ts")
     
@@ -477,7 +483,7 @@ def page_regresi():
 
 
 def page_klasifikasi():
-    st.markdown('<h1 class="main-title">🧪 Klasifikasi Multi-Algoritma</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">🧪 <span class="gradient-text">Klasifikasi Multi-Algoritma</span></h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("klasifikasi", "clf")
     c1, c2 = st.columns(2)
     model_name = c1.selectbox(
@@ -523,7 +529,7 @@ def page_klasifikasi():
 
 
 def page_clustering():
-    st.markdown('<h1 class="main-title">🔵 Clustering K-Means</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">🔵 <span class="gradient-text">Clustering K-Means</span></h1>', unsafe_allow_html=True)
     name, df, n_extra, feats, tn = select_data("clustering", "clu")
     k = st.slider("Jumlah Cluster (k)", 2, 10, 3, key="clu_k")
     
@@ -565,7 +571,7 @@ def page_clustering():
 
 
 def page_retrain():
-    st.markdown('<h1 class="main-title">🔁 Management Data & Retraining</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">🔁 <span class="gradient-text">Management Data & Retraining</span></h1>', unsafe_allow_html=True)
     if db is None:
         st.error(f"Fitur ini membutuhkan koneksi MongoDB Atlas. Status: {db_error}")
         return
@@ -716,7 +722,7 @@ def page_retrain():
 
 
 def page_komentar():
-    st.markdown('<h1 class="main-title">💬 Diskusi & Komentar Publik</h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">💬 <span class="gradient-text">Diskusi & Komentar Publik</span></h1>', unsafe_allow_html=True)
     if db is None:
         st.error(f"Fitur ini membutuhkan koneksi MongoDB. Status: {db_error}")
         return
