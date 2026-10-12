@@ -2,7 +2,7 @@
 TAS AI - Hana Meisaria
 Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
-Sumber data: scikit-learn (Diabetes, Iris, Wine)
+Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
 """
 import os
 import pickle
@@ -14,7 +14,13 @@ import pandas as pd
 import streamlit as st
 from pymongo import MongoClient
 from sklearn.cluster import KMeans
-from sklearn.datasets import load_diabetes, load_iris, load_wine
+from sklearn.datasets import (
+    fetch_california_housing,
+    load_breast_cancer,
+    load_diabetes,
+    load_iris,
+    load_wine,
+)
 from sklearn.decomposition import PCA
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.linear_model import LinearRegression, LogisticRegression
@@ -37,7 +43,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
-# Konfigurasi Halaman dengan Icon Student
+# Konfigurasi Halaman
 st.set_page_config(
     page_title="TAS AI - Hana Meisaria", 
     page_icon="👩‍🎓", 
@@ -46,16 +52,13 @@ st.set_page_config(
 )
 
 # ----------------------------------------------------------------------------
-# Custom CSS untuk UI/UX Lebih Modern
+# Custom CSS untuk UI/UX Modern
 # ----------------------------------------------------------------------------
 st.markdown("""
     <style>
-    /* Styling Container Utama */
     .stApp {
         background-color: #0e1117;
     }
-    
-    /* Header Title Modern */
     .main-title {
         background: linear-gradient(90deg, #4F46E5, #06B6D4);
         -webkit-background-clip: text;
@@ -64,14 +67,12 @@ st.markdown("""
         font-size: 2.5rem;
         margin-bottom: 0.2rem;
     }
-    
-    /* Card Dashboard Styling */
     .custom-card {
         background-color: #1f2937;
         border-radius: 12px;
         padding: 20px;
         border: 1px solid #374151;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         transition: transform 0.2s ease, box-shadow 0.2s ease;
         margin-bottom: 15px;
     }
@@ -90,8 +91,6 @@ st.markdown("""
         color: #9ca3af;
         font-size: 0.9rem;
     }
-    
-    /* Metric Card Customization */
     [data-testid="stMetricValue"] {
         font-size: 1.8rem;
         font-weight: 700;
@@ -103,8 +102,6 @@ st.markdown("""
         padding: 12px 16px;
         border-radius: 10px;
     }
-
-    /* Style Tab */
     .stTabs [data-baseweb="tab-list"] {
         gap: 8px;
     }
@@ -121,14 +118,22 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
-# Konfigurasi Dataset
+# Konfigurasi Multi-Dataset (2-3 Dataset per Modul)
 # ----------------------------------------------------------------------------
-LOADERS = {"Diabetes": load_diabetes, "Iris": load_iris, "Wine": load_wine}
-TASK_DATASETS = {
-    "regresi": ["Diabetes"],
-    "klasifikasi": ["Iris", "Wine"],
-    "clustering": ["Iris", "Wine"],
+LOADERS = {
+    "Diabetes": load_diabetes,
+    "California Housing": fetch_california_housing,
+    "Iris": load_iris,
+    "Wine": load_wine,
+    "Breast Cancer": load_breast_cancer,
 }
+
+TASK_DATASETS = {
+    "regresi": ["Diabetes", "California Housing"],
+    "klasifikasi": ["Iris", "Wine", "Breast Cancer"],
+    "clustering": ["Iris", "Wine", "Breast Cancer"],
+}
+
 TASK_LABEL = {
     "regresi": "Regresi Linear",
     "klasifikasi": "Klasifikasi",
@@ -195,7 +200,15 @@ def load_base(name):
     feats = list(d.feature_names)
     tn = getattr(d, "target_names", None)
     tn = [str(x) for x in tn] if tn is not None else None
-    return d.frame[feats + ["target"]].copy(), feats, tn
+    
+    # Batasi dataset California Housing atau Breast Cancer agar fitur tidak terlalu banyak di UI
+    if name == "California Housing":
+        feats = feats[:6]
+    elif name == "Breast Cancer":
+        feats = feats[:8]
+
+    df = d.frame[feats + ["target"]].copy()
+    return df, feats, tn
 
 
 def get_extra(task, name, feats):
@@ -355,7 +368,7 @@ def show_metrics(metrics):
 
 def select_data(task, key_prefix):
     c1, c2 = st.columns([1, 2])
-    name = c1.selectbox("Dataset (scikit-learn)", TASK_DATASETS[task], key=f"{key_prefix}_ds")
+    name = c1.selectbox("Pilih Dataset (scikit-learn)", TASK_DATASETS[task], key=f"{key_prefix}_ds")
     use_extra = c2.checkbox(
         "Sertakan data tambahan dari MongoDB saat training",
         value=True,
@@ -371,8 +384,8 @@ def select_data(task, key_prefix):
 # Halaman Dashboard
 # ----------------------------------------------------------------------------
 def page_home():
-    st.markdown('<h1 class="main-title">👩‍🎓 Dashboard Machine Learning</h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**.")
+    st.markdown('<h1 class="main-title">🧠🤖 Dashboard Machine Learning</h1>', unsafe_allow_html=True)
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi secara *real-time* dengan **MongoDB Atlas**. TAS AI : Hana Meisaria 632025057")
     st.write("")
 
     c1, c2, c3 = st.columns(3)
@@ -380,21 +393,21 @@ def page_home():
         st.markdown('''
             <div class="custom-card">
                 <div class="card-title">📈 Regresi Linear</div>
-                <div class="card-desc">Prediksi progres penyakit menggunakan dataset Diabetes.</div>
+                <div class="card-desc">Prediksi nilai kontinu dengan pilihan dataset <b>Diabetes</b> & <b>California Housing</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
     with c2:
         st.markdown('''
             <div class="custom-card">
                 <div class="card-title">🧪 Klasifikasi Multi-Algoritma</div>
-                <div class="card-desc">Prediksi kelas varietas menggunakan dataset Iris & Wine.</div>
+                <div class="card-desc">Prediksi kategori kelas dengan pilihan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
     with c3:
         st.markdown('''
             <div class="custom-card">
                 <div class="card-title">🔵 Clustering K-Means</div>
-                <div class="card-desc">Pengelompokan pola data tak berlabel dengan visualisasi PCA.</div>
+                <div class="card-desc">Pengelompokan data tak berlabel dengan dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
             </div>
         ''', unsafe_allow_html=True)
 
@@ -442,7 +455,7 @@ def page_regresi():
         ax.plot(lim, lim, "--", color='#f43f5e', linewidth=2)
         ax.set_xlabel("Nilai Aktual", color='#9ca3af')
         ax.set_ylabel("Nilai Prediksi", color='#9ca3af')
-        ax.set_title("Aktual vs Prediksi (Data Uji)", color='#f3f4f6')
+        ax.set_title(f"Aktual vs Prediksi ({name})", color='#f3f4f6')
         ax.tick_params(colors='#9ca3af')
         for spine in ax.spines.values():
             spine.set_color('#374151')
@@ -455,12 +468,12 @@ def page_regresi():
 
     with t3:
         base = load_base(name)[0]
-        st.markdown("##### Input Nilai Fitur untuk Menguji Prediksi:")
+        st.markdown(f"##### Input Nilai Fitur ({name}):")
         vals = feature_inputs(base, feats, "reg_pred")
         if st.button("🚀 Jalankan Prediksi", key="reg_btn", type="primary"):
             y = res["model"].predict(pd.DataFrame([vals], columns=feats))[0]
             st.balloons()
-            st.success(f"Hasil Prediksi Progres Penyakit: **{y:.2f}**")
+            st.success(f"Hasil Prediksi Target: **{y:.4f}**")
 
 
 def page_klasifikasi():
@@ -479,31 +492,34 @@ def page_klasifikasi():
     t1, t2, t3 = st.tabs(["📊 Distribusi Data", "🎯 Confusion Matrix", "🔮 Simulator Prediksi"])
     with t1:
         show = df.copy()
-        show["kelas"] = show["target"].map(lambda i: tn[int(i)])
+        show["kelas"] = show["target"].map(lambda i: tn[int(i)] if tn else str(int(i)))
         st.dataframe(show.tail(20) if n_extra else show.head(20), use_container_width=True)
         st.bar_chart(show["kelas"].value_counts())
     with t2:
         fig, ax = plt.subplots(figsize=(5, 4))
         fig.patch.set_facecolor('#111827')
         ax.set_facecolor('#1f2937')
-        cm_display = ConfusionMatrixDisplay(res["cm"], display_labels=[tn[c] for c in res["classes"]])
+        labels_display = [tn[c] if tn else str(c) for c in res["classes"]]
+        cm_display = ConfusionMatrixDisplay(res["cm"], display_labels=labels_display)
         cm_display.plot(ax=ax, colorbar=False, cmap='plasma')
-        ax.set_title(f"Confusion Matrix ({model_name})", color='#f3f4f6')
+        ax.set_title(f"Confusion Matrix ({model_name} - {name})", color='#f3f4f6')
         ax.tick_params(colors='#9ca3af')
         st.pyplot(fig)
     with t3:
         base = load_base(name)[0]
-        st.markdown("##### Input Nilai Fitur:")
+        st.markdown(f"##### Input Nilai Fitur ({name}):")
         vals = feature_inputs(base, feats, "clf_pred")
         if st.button("🚀 Prediksi Kelas", key="clf_btn", type="primary"):
             Xn = pd.DataFrame([vals], columns=feats)
             pred = int(res["model"].predict(Xn)[0])
+            pred_label = tn[pred] if tn else str(pred)
             st.balloons()
-            st.success(f"Hasil Prediksi Kelas: **{tn[pred]}**")
+            st.success(f"Hasil Prediksi Kelas: **{pred_label}**")
             if hasattr(res["model"], "predict_proba"):
                 proba = res["model"].predict_proba(Xn)[0]
                 st.caption("Distribusi Probabilitas Prediksi:")
-                st.bar_chart(pd.Series(proba, index=[tn[c] for c in res["model"].classes_]))
+                idx_labels = [tn[c] if tn else str(c) for c in res["model"].classes_]
+                st.bar_chart(pd.Series(proba, index=idx_labels))
 
 
 def page_clustering():
@@ -524,7 +540,7 @@ def page_clustering():
         sc = ax.scatter(res["pca"][:, 0], res["pca"][:, 1], c=res["labels"], cmap="viridis", s=35, alpha=0.9)
         ax.set_xlabel("Principal Component 1 (PC1)", color='#9ca3af')
         ax.set_ylabel("Principal Component 2 (PC2)", color='#9ca3af')
-        ax.set_title(f"Proyeksi K-Means (k={k})", color='#f3f4f6')
+        ax.set_title(f"Proyeksi K-Means (k={k} - {name})", color='#f3f4f6')
         ax.tick_params(colors='#9ca3af')
         c1.pyplot(fig)
 
@@ -541,7 +557,7 @@ def page_clustering():
         st.dataframe(X.groupby("cluster").mean(), use_container_width=True)
     with t3:
         base = load_base(name)[0]
-        st.markdown("##### Input Nilai Fitur:")
+        st.markdown(f"##### Input Nilai Fitur ({name}):")
         vals = feature_inputs(base, feats, "clu_pred")
         if st.button("🚀 Tentukan Cluster", key="clu_btn", type="primary"):
             Xn = res["scaler"].transform(pd.DataFrame([vals], columns=feats))
@@ -575,8 +591,9 @@ def page_retrain():
                     key="rt_man_target",
                 )
             elif task == "klasifikasi":
-                label = st.selectbox("Label Kelas (Target)", tn, key="rt_man_label")
-                target = tn.index(label)
+                labels_opt = tn if tn else [str(i) for i in sorted(base["target"].unique())]
+                label = st.selectbox("Label Kelas (Target)", labels_opt, key="rt_man_label")
+                target = tn.index(label) if tn else float(label)
             if st.form_submit_button("💾 Simpan Baris Data ke MongoDB"):
                 insert_rows(task, name, [(vals, target)], "manual")
                 st.success("Data baru berhasil disimpan ke MongoDB! Buka tab Retraining untuk melatih ulang model.")
@@ -588,7 +605,7 @@ def page_retrain():
         st.download_button(
             "📥 Unduh Template Format CSV",
             base[cols_needed].head(3).to_csv(index=False),
-            file_name=f"template_{name.lower()}.csv",
+            file_name=f"template_{name.lower().replace(' ', '_')}.csv",
             mime="text/csv",
         )
         up = st.file_uploader("Upload File CSV Data Baru", type="csv", key="rt_csv")
@@ -600,7 +617,7 @@ def page_retrain():
                     st.error(f"Format Kolom Kurang Tepat: {missing}")
                 else:
                     new = new[cols_needed].dropna()
-                    if task == "klasifikasi" and new["target"].dtype == object:
+                    if task == "klasifikasi" and new["target"].dtype == object and tn:
                         new["target"] = new["target"].map({n: i for i, n in enumerate(tn)})
                         new = new.dropna()
                     for c in cols_needed:
