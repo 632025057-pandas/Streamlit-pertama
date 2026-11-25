@@ -3,10 +3,10 @@ TAS AI - Hana Meisaria (NIM 632025057)
 Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
 + Integrasi Groq AI (Asisten AI, analisis metrik, & analisis sentimen komentar via groq_helper.py)
++ Integrasi Fuzzy Logic (Fuzzy KNN & Fuzzy C-Means) pada modul Klasifikasi
 Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
 
-VERSI 3.2 - Sidebar Modern (Menu Pill & Status Panel) + Mode Edukatif,
-            Penjelasan Matematika Interaktif, Mini Kuis ML, & Kamus Fitur Dataset
+VERSI 3.3 - Sidebar Modern + Mode Edukatif + Fuzzy Logic Classifier
 """
 import os
 import pickle
@@ -48,6 +48,11 @@ from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
 from groq_helper import analisis_sentimen_komentar, page_ai_assistant, page_kuis_ml, tanya_groq
+from fuzzy_helper import (
+    FuzzyKNNClassifier,
+    FuzzyCMeansClassifier,
+    plot_membership,
+)
 
 # ----------------------------------------------------------------------------
 # Konfigurasi Halaman
@@ -171,7 +176,6 @@ st.markdown("""
         color: #64748b;
         margin: 12px 0 4px 4px;
     }
-    /* Tombol navigasi rata kiri (inactive) */
     [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
     [data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
     [data-testid="stSidebar"] button[kind="secondary"] {
@@ -192,7 +196,6 @@ st.markdown("""
         color: #ffffff;
         transform: translateX(3px);
     }
-    /* Tombol halaman aktif */
     [data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
     [data-testid="stSidebar"] button[data-testid="baseButton-primary"],
     [data-testid="stSidebar"] button[kind="primary"] {
@@ -205,7 +208,6 @@ st.markdown("""
         font-weight: 600;
         box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
     }
-    /* Panel Status Sistem */
     .status-panel {
         background-color: #0f172a;
         border: 1px solid #1e293b;
@@ -303,7 +305,6 @@ DATASET_DESC = {
     "Breast Cancer": "Klasifikasi tumor payudara jinak (benign) atau ganas (malignant) berdasarkan 8 fitur morfologi sel medis.",
 }
 
-# Penjelasan tooltip (?) pada setiap kartu metrik
 METRIC_HELP = {
     "R² Score": (
         "Koefisien determinasi (maksimal 1.0). Mengukur seberapa besar variasi target yang "
@@ -348,7 +349,6 @@ METRIC_HELP = {
     ),
 }
 
-# Kamus singkat fitur per dataset agar pengguna paham arti input
 FEATURE_GLOSSARY = {
     "Diabetes": {
         "age": "Usia pasien (skala terstandarisasi)",
@@ -540,7 +540,17 @@ def feature_inputs(base, feats, prefix, ncols=3, dataset_name=None):
 # ----------------------------------------------------------------------------
 # Model Training
 # ----------------------------------------------------------------------------
-def make_classifier(model_name, seed):
+def make_classifier(model_name, seed, fuzzy_k=5, fuzzy_m=2.0):
+    if model_name == "Fuzzy KNN":
+        return make_pipeline(
+            StandardScaler(),
+            FuzzyKNNClassifier(n_neighbors=fuzzy_k, m=fuzzy_m),
+        )
+    if model_name == "Fuzzy C-Means":
+        return make_pipeline(
+            StandardScaler(),
+            FuzzyCMeansClassifier(n_clusters=None, m=fuzzy_m, random_state=seed),
+        )
     return {
         "Logistic Regression": make_pipeline(StandardScaler(), LogisticRegression(max_iter=1000)),
         "Random Forest": RandomForestClassifier(n_estimators=200, random_state=seed),
@@ -550,7 +560,8 @@ def make_classifier(model_name, seed):
 
 
 @st.cache_resource(show_spinner=False)
-def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42):
+def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2,
+              seed=42, fuzzy_k=5, fuzzy_m=2.0):
     if task == "regresi":
         X, y = df.drop(columns="target"), df["target"]
         Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=seed)
@@ -573,7 +584,7 @@ def run_model(task, df, model_name="Random Forest", k=3, test_size=0.2, seed=42)
     if task == "klasifikasi":
         X, y = df.drop(columns="target"), df["target"]
         Xtr, Xte, ytr, yte = train_test_split(X, y, test_size=test_size, random_state=seed, stratify=y)
-        m = make_classifier(model_name, seed).fit(Xtr, ytr)
+        m = make_classifier(model_name, seed, fuzzy_k, fuzzy_m).fit(Xtr, ytr)
         pred = m.predict(Xte)
         classes = sorted(y.unique())
         return {
@@ -626,7 +637,6 @@ def show_metrics(metrics):
 
 
 def show_quick_interpretation(task, metrics):
-    """Interpretasi edukatif cepat secara otomatis berdasarkan nilai metrik utama."""
     if task == "regresi":
         r2 = metrics["R² Score"]
         if r2 >= 0.75:
@@ -676,10 +686,9 @@ def render_ai_insight(ringkasan, key):
 
 
 # ============================================================================
-# PENJELASAN MATEMATIKA INTERAKTIF (HITUNG MANUAL DARI HASIL MODEL PENGGUNA)
+# PENJELASAN MATEMATIKA INTERAKTIF
 # ============================================================================
 def _bagi(a, b):
-    """Pembagian aman: hasil 0 jika penyebut 0."""
     return a / b if b else 0.0
 
 
@@ -700,7 +709,6 @@ def math_regresi(res, feats):
     with st.expander("🧮 Penjelasan Matematika: Hitung Manual dari Hasil Model Anda"):
         st.caption("Semua angka di bawah diambil langsung dari model yang sedang aktif dan akan berubah saat dataset / test size diubah.")
 
-        # ---- Langkah 1: dari mana prediksi berasal
         st.markdown(r"#### Langkah 1 — Dari mana prediksi $\hat{y}$ berasal?")
         idx = int(st.number_input("Pilih data uji ke-", min_value=1, max_value=n, value=1, step=1, key="math_reg_idx"))
         xi = np.asarray(res["X_test"].iloc[idx - 1], dtype=float)
@@ -717,7 +725,6 @@ def math_regresi(res, feats):
             f"Nilai aktual data ini **{y[idx - 1]:.4f}**, sehingga error = {y[idx - 1]:.4f} − {pred_manual:.4f} = **{y[idx - 1] - pred_manual:.4f}**."
         )
 
-        # ---- Langkah 2: MAE, MSE, RMSE
         st.markdown("#### Langkah 2 — Menghitung MAE, MSE & RMSE")
         n_show = min(5, n)
         contoh = pd.DataFrame({
@@ -741,7 +748,6 @@ def math_regresi(res, feats):
             "kesalahan besar yang 'dihukum' lebih berat karena dikuadratkan."
         )
 
-        # ---- Langkah 3: R²
         st.markdown(r"#### Langkah 3 — Menghitung $R^2$")
         ybar = y.mean()
         ss_res = (e ** 2).sum()
@@ -767,7 +773,6 @@ def math_klasifikasi(res, tn):
     with st.expander("🧮 Penjelasan Matematika: Hitung Manual dari Confusion Matrix Anda"):
         st.caption("Semua angka di bawah diambil dari Confusion Matrix model yang sedang aktif.")
 
-        # ---- Langkah 1: Accuracy
         st.markdown("#### Langkah 1 — Accuracy dari diagonal Confusion Matrix")
         st.dataframe(
             pd.DataFrame(cm, index=[f"Aktual: {x}" for x in names], columns=[f"Prediksi: {x}" for x in names]),
@@ -776,7 +781,6 @@ def math_klasifikasi(res, tn):
         benar = int(np.trace(cm))
         st.latex(rf"\text{{Accuracy}} = \frac{{\text{{jumlah diagonal}}}}{{\text{{total data uji}}}} = \frac{{{benar}}}{{{total}}} = {benar / total:.4f}")
 
-        # ---- Langkah 2: Precision / Recall / F1 satu kelas
         st.markdown("#### Langkah 2 — Precision, Recall & F1 untuk satu kelas")
         st.caption("Untuk menghitung metrik satu kelas, kelas itu dianggap 'positif' dan kelas lainnya dianggap 'negatif'.")
         pilih = st.selectbox("Kelas yang dianggap positif:", range(len(names)), format_func=lambda i: names[i], key="math_clf_cls")
@@ -801,7 +805,6 @@ def math_klasifikasi(res, tn):
             + (f" Ada **{FN}** data yang terlewat (FN)." if FN else "")
         )
 
-        # ---- Langkah 3: Macro average
         st.markdown("#### Langkah 3 — Dari per kelas menjadi satu angka (Macro Average)")
         baris, P, R, F = [], [], [], []
         for i, nm in enumerate(names):
@@ -843,7 +846,6 @@ def math_clustering(res, df):
         st.caption("Semua angka di bawah diambil dari model K-Means yang sedang aktif.")
         idx = int(st.number_input("Pilih titik data ke-", min_value=1, max_value=n, value=1, step=1, key="math_clu_idx")) - 1
 
-        # ---- Langkah 1: standarisasi
         st.markdown("#### Langkah 1 — Standarisasi fitur (StandardScaler)")
         z = Xs[idx]
         st.dataframe(
@@ -860,7 +862,6 @@ def math_clustering(res, df):
         st.latex(rf"z_{{1}} = \frac{{x - \mu}}{{\sigma}} = \frac{{{x0:.4f} - {m0:.4f}}}{{{s0:.4f}}} = {z[0]:.4f}")
         st.caption("Contoh perhitungan untuk fitur pertama. Setelah ini semua fitur berskala sebanding sehingga adil dalam perhitungan jarak.")
 
-        # ---- Langkah 2: jarak ke centroid
         st.markdown("#### Langkah 2 — Jarak ke setiap centroid & penentuan cluster")
         d_cent = np.linalg.norm(cent - z, axis=1)
         st.dataframe(
@@ -871,7 +872,6 @@ def math_clustering(res, df):
         st.latex(rf"d(x, \mu_j) = \sqrt{{\sum_i (z_i - \mu_{{j,i}})^2}} \;\Rightarrow\; \min = {d_cent[j]:.4f} \text{{ (cluster {j})}}")
         st.caption(f"💡 Titik terdekat dengan centroid cluster **{j}**; label dari K-Means: **{int(labels[idx])}**.")
 
-        # ---- Langkah 3: Inertia
         st.markdown("#### Langkah 3 — Inertia (WCSS)")
         sse = [float(((Xs[labels == c] - cent[c]) ** 2).sum()) for c in range(k)]
         st.dataframe(
@@ -881,7 +881,6 @@ def math_clustering(res, df):
         st.latex(rf"J = \sum_{{j=1}}^{{k}} \sum_{{x_i \in C_j}} \|x_i - \mu_j\|^2 = {' + '.join(f'{v:.2f}' for v in sse)} = {sum(sse):.4f}")
         _cek_cocok(sum(sse), res["metrics"]["Inertia"], "Inertia")
 
-        # ---- Langkah 4: Silhouette
         st.markdown(f"#### Langkah 4 — Silhouette untuk titik data ke-{idx + 1}")
         d = np.linalg.norm(Xs - z, axis=1)
         sama = labels == labels[idx]
@@ -906,7 +905,6 @@ def math_clustering(res, df):
         )
         _cek_cocok(float(s_all.mean()), res["metrics"]["Silhouette"], "Silhouette")
 
-        # ---- Langkah 5: Davies-Bouldin
         st.markdown("#### Langkah 5 — Davies-Bouldin Index")
         sp = [float(np.linalg.norm(Xs[labels == c] - cent[c], axis=1).mean()) for c in range(k)]
         Rij = []
@@ -940,8 +938,8 @@ def select_data(task, key_prefix):
 def page_home():
     st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
     st.markdown(
-        "Media pembelajaran & eksperimen interaktif **Regresi Linear**, **Klasifikasi**, dan **Clustering** "
-        "terintegrasi *real-time* dengan **MongoDB Atlas** & **Groq AI**.<br>"
+        "Media pembelajaran & eksperimen interaktif **Regresi Linear**, **Klasifikasi** (termasuk **Fuzzy Logic**), "
+        "dan **Clustering** terintegrasi *real-time* dengan **MongoDB Atlas** & **Groq AI**.<br>"
         "**TAS AI : Hana Meisaria 632025057**",
         unsafe_allow_html=True,
     )
@@ -959,8 +957,8 @@ def page_home():
     with c2:
         st.markdown("""
             <div class="custom-card">
-                <div class="card-title">🧪 Klasifikasi Multi-Algoritma</div>
-                <div class="card-desc"><b>Supervised Learning</b> untuk memprediksi kelas diskrit pada dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
+                <div class="card-title">🧪 Klasifikasi + Fuzzy</div>
+                <div class="card-desc"><b>Supervised Learning</b> untuk memprediksi kelas diskrit pada <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>, kini dilengkapi <b>Fuzzy KNN</b> & <b>Fuzzy C-Means</b> untuk analisis derajat keanggotaan.</div>
             </div>
         """, unsafe_allow_html=True)
         st.button("🚀 Modul Klasifikasi", key="btn_nav_clf", use_container_width=True, on_click=change_page, args=("🧪 Klasifikasi",))
@@ -979,7 +977,7 @@ def page_home():
         st.markdown("""
             <div class="custom-card">
                 <div class="card-title">🤖 Asisten AI (Groq)</div>
-                <div class="card-desc">Tutor interaktif dengan tombol pertanyaan cepat untuk belajar konsep ML, arti rumus matematika, dan interpretasi metrik evaluasi.</div>
+                <div class="card-desc">Tutor interaktif dengan tombol pertanyaan cepat untuk belajar konsep ML, arti rumus matematika, fuzzy logic, dan interpretasi metrik evaluasi.</div>
             </div>
         """, unsafe_allow_html=True)
         st.button("💬 Buka Asisten AI (Groq)", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
@@ -987,12 +985,11 @@ def page_home():
         st.markdown("""
             <div class="custom-card">
                 <div class="card-title">📝 Mini Kuis Machine Learning</div>
-                <div class="card-desc">Uji pemahaman Regresi, Klasifikasi, Clustering, dan evaluasi model dengan pembahasan otomatis serta generator soal baru dari Groq AI.</div>
+                <div class="card-desc">Uji pemahaman Regresi, Klasifikasi, Clustering, Fuzzy Logic, dan evaluasi model dengan pembahasan otomatis serta generator soal baru dari Groq AI.</div>
             </div>
         """, unsafe_allow_html=True)
         st.button("🎯 Mulai Mini Kuis ML", key="btn_nav_kuis", use_container_width=True, on_click=change_page, args=("📝 Mini Kuis ML",))
 
-    # --- PETA KONSEP EDUKATIF ---
     st.write("---")
     st.subheader("📚 Peta Konsep Machine Learning")
     with st.expander("📖 Pelajari Perbedaan Supervised vs Unsupervised Learning & Alur Kerja ML", expanded=True):
@@ -1005,11 +1002,18 @@ def page_home():
                 "Pertanyaan yang Dijawab": "Berapa nilai yang diprediksi?",
             },
             {
-                "Metode": "Klasifikasi",
+                "Metode": "Klasifikasi (crisp)",
                 "Paradigma": "Supervised Learning (Ada Label Target)",
                 "Bentuk Output": "Kategori / Kelas diskrit (mis. jinak vs ganas)",
                 "Metrik Evaluasi": "Accuracy, Precision, Recall, F1 Score",
                 "Pertanyaan yang Dijawab": "Termasuk kategori manakah data ini?",
+            },
+            {
+                "Metode": "Fuzzy Klasifikasi (Fuzzy KNN / FCM)",
+                "Paradigma": "Soft Computing / Supervised (Fuzzy)",
+                "Bentuk Output": "Derajat keanggotaan 0–1 per kelas",
+                "Metrik Evaluasi": "Accuracy, Precision, Recall, F1 Score + Membership",
+                "Pertanyaan yang Dijawab": "Seberapa besar kecocokan data ini dengan setiap kelas?",
             },
             {
                 "Metode": "Clustering (K-Means)",
@@ -1163,13 +1167,17 @@ def page_regresi():
 
 
 # ============================================================================
-# HALAMAN: KLASIFIKASI
+# HALAMAN: KLASIFIKASI (dengan Fuzzy)
 # ============================================================================
 def page_klasifikasi():
     st.markdown('<h1 class="main-title-container">🧪 <span class="gradient-text">Klasifikasi Multi-Algoritma</span></h1>', unsafe_allow_html=True)
-    st.info("💡 **Klasifikasi** termasuk *Supervised Learning* yang memetakan fitur input ke dalam **kelas/kategori diskrit** berdasarkan pola pada data latih berlabel.")
+    st.info(
+        "💡 **Klasifikasi** termasuk *Supervised Learning* yang memetakan fitur input ke dalam **kelas/kategori diskrit**. "
+        "Modul ini mendukung **4 algoritma crisp** (Random Forest, Logistic Regression, KNN, Decision Tree) dan "
+        "**2 algoritma fuzzy** (Fuzzy KNN, Fuzzy C-Means) yang menghasilkan **derajat keanggotaan** per kelas."
+    )
 
-    with st.expander("📖 Pelajari Teori, Rumus Evaluasi & Perbandingan 4 Algoritma"):
+    with st.expander("📖 Pelajari Teori, Rumus Evaluasi, Perbandingan Algoritma & Konsep Fuzzy"):
         st.markdown("**1. Rumus Metrik Evaluasi Klasifikasi (berdasarkan TP, TN, FP, FN):**")
         k1, k2 = st.columns(2)
         with k1:
@@ -1185,25 +1193,44 @@ def page_klasifikasi():
             "**2. Cara Membaca *Confusion Matrix*:**\n"
             "- Angka pada **diagonal utama** (kiri atas ke kanan bawah) adalah jumlah prediksi yang **benar**.\n"
             "- Angka di luar diagonal menunjukkan jumlah data yang **salah diklasifikasikan** ke kelas lain.\n\n"
-            "**3. Karakteristik Algoritma yang Tersedia:**\n"
-            "- **Random Forest:** Menggabungkan ratusan pohon keputusan (*ensemble*) sehingga stabil dan tahan *overfitting*.\n"
-            "- **Logistic Regression:** Menghitung probabilitas kelas lewat fungsi sigmoid (membutuhkan *StandardScaler*).\n"
-            "- **KNN (K-Nearest Neighbors):** Menentukan kelas berdasarkan voting tetangga terdekat berdasarkan jarak Euclidean.\n"
-            "- **Decision Tree:** Membagi data dengan aturan *if-else* bercabang; mudah diinterpretasi namun rentan *overfitting*."
+            "**3. Karakteristik Algoritma *Crisp* yang Tersedia:**\n"
+            "- **Random Forest:** Ensemble 200 pohon keputusan, stabil & tahan *overfitting*.\n"
+            "- **Logistic Regression:** Model probabilistik linier dengan fungsi sigmoid (butuh *StandardScaler*).\n"
+            "- **KNN:** Voting tetangga terdekat berdasarkan jarak Euclidean (*StandardScaler*).\n"
+            "- **Decision Tree:** Pohon keputusan bercabang; mudah diinterpretasi namun rentan *overfitting*."
+        )
+
+        st.markdown("**4. Konsep Fuzzy Logic (Logika Samar) — Perbedaan dengan *Crisp*:**")
+        st.markdown(
+            "Klasifikasi *crisp* hanya memberi keputusan **ya/tidak** (0 atau 1). "
+            "Klasifikasi **fuzzy** memberi **derajat keanggotaan** di setiap kelas (0.0 – 1.0), "
+            "sehingga model bisa menyatakan *\"saya 70% yakin kelas A, 30% yakin kelas B\"*. "
+            "Pendekatan ini berguna ketika batas antar kelas **tidak tegas** (misal stadium awal penyakit, "
+            "kualitas wine yang berkelanjutan, dsb.)."
+        )
+        st.markdown("**Fuzzy KNN — bobot tetangga & derajat keanggotaan:**")
+        st.latex(r"w_i = \frac{1}{d_i^{\,2/(m-1)}}, \qquad u_c(x) = \frac{\sum_{i:\,y_i=c} w_i}{\sum_{i} w_i}")
+        st.markdown(
+            "dengan $d_i$ = jarak ke tetangga ke-$i$ dan $m$ = **fuzzifier** (m > 1). "
+            "Semakin besar $m$, semakin **kabur** batas antar kelas; semakin mendekati 1, semakin **tegas** (mendekati crisp)."
+        )
+        st.markdown("**Fuzzy C-Means (FCM) — update derajat keanggotaan & centroid:**")
+        st.latex(r"u_{ik} = \left[ \sum_{j=1}^{c} \left( \frac{d_{ik}}{d_{jk}} \right)^{2/(m-1)} \right]^{-1}, \quad v_k = \frac{\sum_i u_{ik}^m x_i}{\sum_i u_{ik}^m}")
+        st.markdown(
+            "Setelah FCM konvergen, setiap **cluster fuzzy** dipetakan ke **kelas mayoritas** anggotanya. "
+            "Prediksi akhir = jumlah membership semua cluster yang memetakan ke kelas yang sama."
         )
 
     name, df, n_extra, feats, tn = select_data("klasifikasi", "clf")
     show_feature_glossary(name)
 
     c1, c2 = st.columns(2)
-    model_name = c1.selectbox("Pilih Algoritma ML", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="clf_model")
-    algo_desc = {
-        "Random Forest": "🌲 **Random Forest:** Ensemble 200 Decision Tree, stabil & akurat.",
-        "Logistic Regression": "📐 **Logistic Regression:** Model probabilistik linier dengan StandardScaler.",
-        "KNN": "📍 **KNN:** Klasifikasi berdasarkan jarak ke 5 tetangga terdekat (dengan StandardScaler).",
-        "Decision Tree": "🌿 **Decision Tree:** Pohon keputusan bercabang berbasis pemisahan Gini.",
-    }
-    st.caption(algo_desc[model_name])
+    model_name = c1.selectbox(
+        "Pilih Algoritma ML",
+        ["Random Forest", "Logistic Regression", "KNN", "Decision Tree",
+         "Fuzzy KNN", "Fuzzy C-Means"],
+        key="clf_model",
+    )
     test_size = c2.slider(
         "Proporsi Data Uji",
         0.1, 0.5, 0.2, 0.05,
@@ -1211,14 +1238,53 @@ def page_klasifikasi():
         key="clf_ts",
     )
 
+    algo_desc = {
+        "Random Forest": "🌲 **Random Forest:** Ensemble 200 Decision Tree, stabil & akurat.",
+        "Logistic Regression": "📐 **Logistic Regression:** Model probabilistik linier dengan StandardScaler.",
+        "KNN": "📍 **KNN:** Klasifikasi berdasarkan jarak ke 5 tetangga terdekat (dengan StandardScaler).",
+        "Decision Tree": "🌿 **Decision Tree:** Pohon keputusan bercabang berbasis pemisahan Gini.",
+        "Fuzzy KNN": "🌫️ **Fuzzy KNN:** KNN dengan bobot fuzzy 1/d^(2/(m−1)); setiap kelas memperoleh **derajat keanggotaan** 0–1.",
+        "Fuzzy C-Means": "🎨 **Fuzzy C-Means:** Clustering fuzzy; setiap cluster dipetakan ke kelas mayoritas lalu membership-nya diagregasi.",
+    }
+    st.caption(algo_desc[model_name])
+
+    # Slider parameter fuzzy (hanya untuk model fuzzy)
+    fuzzy_k, fuzzy_m = 5, 2.0
+    if model_name in ("Fuzzy KNN", "Fuzzy C-Means"):
+        f1, f2 = st.columns(2)
+        fuzzy_m = f1.slider(
+            "Fuzzifier (m)", 1.1, 5.0, 2.0, 0.1,
+            help=(
+                "Mengatur seberapa 'kabur' batas antar kelas. "
+                "m → 1.1 = hampir crisp (tegas). m besar = membership lebih merata / ambigu. "
+                "Nilai ideal umumnya 1.5 – 2.5."
+            ),
+            key="clf_fuzzy_m",
+        )
+        if model_name == "Fuzzy KNN":
+            fuzzy_k = f2.slider(
+                "Jumlah Tetangga (K)", 1, 15, 5, 1,
+                help="Jumlah tetangga terdekat yang diberi bobot fuzzy w_i = 1/d^(2/(m−1)).",
+                key="clf_fuzzy_k",
+            )
+        else:
+            f2.caption("ℹ️ FCM otomatis memakai c = jumlah kelas dataset.")
+
     with st.spinner("Melatih model klasifikasi..."):
-        res = run_model("klasifikasi", df, model_name=model_name, test_size=test_size)
+        res = run_model(
+            "klasifikasi", df,
+            model_name=model_name,
+            test_size=test_size,
+            fuzzy_k=fuzzy_k,
+            fuzzy_m=fuzzy_m,
+        )
     st.caption(f"🧪 Pembagian Data (Stratified): **{res['n_train']}** baris Data Latih · **{res['n_test']}** baris Data Uji")
     show_metrics(res["metrics"])
     show_quick_interpretation("klasifikasi", res["metrics"])
     st.write("")
     render_ai_insight(
-        f"Dataset: {name}. Algoritma Klasifikasi: {model_name}. Metrik evaluasi: {res['metrics']}. "
+        f"Dataset: {name}. Algoritma Klasifikasi: {model_name}. "
+        f"Parameter fuzzy: fuzzy_k={fuzzy_k}, fuzzy_m={fuzzy_m}. Metrik evaluasi: {res['metrics']}. "
         f"Jelaskan secara singkat dan edukatif kualitas performa klasifikasi model ini serta saran perbaikan jika ada.",
         key="clf_ai_explain",
     )
@@ -1284,6 +1350,30 @@ def page_klasifikasi():
                     showlegend=False,
                 )
                 st.plotly_chart(fig, use_container_width=True)
+
+                # --- Visualisasi derajat keanggotaan fuzzy (khusus model fuzzy) ---
+                if model_name in ("Fuzzy KNN", "Fuzzy C-Means"):
+                    st.markdown("##### 🌫️ Derajat Keanggotaan Fuzzy (Membership)")
+                    st.caption(
+                        "Berbeda dengan probabilitas klasifikasi biasa, nilai di bawah adalah "
+                        "**derajat keanggotaan fuzzy** — seberapa cocok data ini dengan tiap kelas "
+                        "berdasarkan rumus fuzzy (bukan sigmoid/voting crisp)."
+                    )
+                    fig_mem = plot_membership(proba, idx_labels)
+                    st.plotly_chart(fig_mem, use_container_width=True)
+                    yakin = float(np.max(proba))
+                    if yakin >= 0.8:
+                        st.success(f"🎯 Model **sangat yakin** ({yakin*100:.1f}%) memilih kelas ini.")
+                    elif yakin >= 0.5:
+                        st.info(
+                            f"👍 Model **cukup yakin** ({yakin*100:.1f}%). "
+                            "Coba ubah fuzzifier m untuk melihat pergeseran membership."
+                        )
+                    else:
+                        st.warning(
+                            f"⚠️ Model **kurang yakin** ({yakin*100:.1f}%) — kelas ini sangat ambigu. "
+                            "Coba turunkan m (mendekati 1.1) agar keputusan lebih tegas."
+                        )
 
 
 # ============================================================================
@@ -1501,7 +1591,12 @@ def page_retrain():
         params = {}
         model_name_selected = "Linear Regression"
         if task == "klasifikasi":
-            model_name_selected = st.selectbox("Algoritma", ["Random Forest", "Logistic Regression", "KNN", "Decision Tree"], key="rt_algo")
+            model_name_selected = st.selectbox(
+                "Algoritma",
+                ["Random Forest", "Logistic Regression", "KNN", "Decision Tree",
+                 "Fuzzy KNN", "Fuzzy C-Means"],
+                key="rt_algo",
+            )
             params["model_name"] = model_name_selected
         elif task == "clustering":
             model_name_selected = "K-Means"
@@ -1719,7 +1814,6 @@ with st.sidebar:
                 args=(label,),
             )
 
-    # Panel Status Sistem & Statistik Ringkas
     mongo_badge = '<span class="badge-ok">● Aktif</span>' if db is not None else '<span class="badge-err">● Offline</span>'
     groq_badge = '<span class="badge-ok">● Aktif</span>' if _secret("GROQ_API_KEY") else '<span class="badge-warn">● No Key</span>'
 
