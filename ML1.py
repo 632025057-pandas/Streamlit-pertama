@@ -2,9 +2,10 @@
 TAS AI - Hana Meisaria (NIM 632025057)
 Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
++ Integrasi Groq AI (via groq_helper.py)
 Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
 
-VERSI 2.0 - Perbaikan UI/UX, Plotly interaktif, navigasi sinkron, download hasil
+VERSI 2.1 - Integrasi Groq AI, analisis metrik otomatis, & indikator status API
 """
 import os
 import pickle
@@ -44,6 +45,8 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
+
+from groq_helper import page_ai_assistant, tanya_groq
 
 # ----------------------------------------------------------------------------
 # Konfigurasi Halaman
@@ -351,6 +354,15 @@ def show_metrics(metrics):
     for c, (k, v) in zip(cols, metrics.items()):
         c.metric(k, f"{v:,.4f}")
 
+def render_ai_insight(ringkasan, key):
+    if st.button("🤖 Jelaskan Hasil Metrik dengan Groq", key=key):
+        with st.spinner("Groq sedang menganalisis metrik..."):
+            jawaban, err = tanya_groq(ringkasan)
+        if err:
+            st.error(err)
+        else:
+            st.success(jawaban)
+
 def select_data(task, key_prefix):
     c1, c2 = st.columns([1, 2])
     name = c1.selectbox("Pilih Dataset (scikit-learn)", TASK_DATASETS[task], key=f"{key_prefix}_ds")
@@ -368,7 +380,7 @@ def select_data(task, key_prefix):
 # ============================================================================
 def page_home():
     st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
-    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi *real-time* dengan **MongoDB Atlas**.<br>**TAS AI : Hana Meisaria 632025057**", unsafe_allow_html=True)
+    st.markdown("Aplikasi interaktif pemodelan **Regresi Linear**, **Klasifikasi**, dan **Clustering** terintegrasi *real-time* dengan **MongoDB Atlas** & **Groq AI**.<br>**TAS AI : Hana Meisaria 632025057**", unsafe_allow_html=True)
     st.write("")
 
     c1, c2, c3 = st.columns(3)
@@ -396,6 +408,15 @@ def page_home():
             </div>
         ''', unsafe_allow_html=True)
         st.button("🚀 Modul Clustering", key="btn_nav_clu", use_container_width=True, on_click=change_page, args=("🔵 Clustering",))
+
+    st.write("")
+    st.markdown('''
+        <div class="custom-card">
+            <div class="card-title">🤖 Asisten AI (Groq)</div>
+            <div class="card-desc">Tanya jawab interaktif seputar konsep Machine Learning, dataset, dan interpretasi hasil evaluasi model secara cepat.</div>
+        </div>
+    ''', unsafe_allow_html=True)
+    st.button("💬 Buka Asisten AI (Groq)", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
 
     st.write("---")
     st.subheader("⚡ Status Server & Database")
@@ -431,6 +452,12 @@ def page_regresi():
         res = run_model("regresi", df, test_size=test_size)
     show_metrics(res["metrics"])
     st.write("")
+    render_ai_insight(
+        f"Dataset: {name}. Model: Regresi Linear. Metrik evaluasi: {res['metrics']}. "
+        f"Jelaskan secara singkat arti metrik tersebut dan apakah performa model ini sudah baik.",
+        key="reg_ai_explain",
+    )
+    st.write("")
 
     t1, t2, t3 = st.tabs(["📊 Dataset Overview", "📈 Grafik & Koefisien", "🔮 Simulator Prediksi"])
 
@@ -441,7 +468,6 @@ def page_regresi():
 
     with t2:
         c1, c2 = st.columns(2)
-        # Scatter interaktif dengan Plotly
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=res["y_test"], y=res["pred"], mode="markers",
@@ -477,7 +503,6 @@ def page_regresi():
                 y = res["model"].predict(pd.DataFrame([vals], columns=feats))[0]
             st.balloons()
             st.success(f"🎯 Hasil Prediksi Target: **{y:.4f}**")
-            # Download hasil prediksi
             hasil_df = pd.DataFrame([vals + [y]], columns=feats + ["Prediksi"])
             st.download_button(
                 "📥 Unduh Hasil Prediksi (CSV)",
@@ -509,6 +534,12 @@ def page_klasifikasi():
     with st.spinner("Melatih model klasifikasi..."):
         res = run_model("klasifikasi", df, model_name=model_name, test_size=test_size)
     show_metrics(res["metrics"])
+    st.write("")
+    render_ai_insight(
+        f"Dataset: {name}. Algoritma Klasifikasi: {model_name}. Metrik evaluasi: {res['metrics']}. "
+        f"Jelaskan secara singkat kualitas performa klasifikasi model ini.",
+        key="clf_ai_explain",
+    )
     st.write("")
 
     t1, t2, t3 = st.tabs(["📊 Distribusi Data", "🎯 Confusion Matrix", "🔮 Simulator Prediksi"])
@@ -569,6 +600,12 @@ def page_clustering():
     with st.spinner("Menjalankan K-Means..."):
         res = run_model("clustering", df, k=k)
     show_metrics(res["metrics"])
+    st.write("")
+    render_ai_insight(
+        f"Dataset: {name}. Model: K-Means Clustering dengan k={k}. Metrik evaluasi: {res['metrics']}. "
+        f"Jelaskan secara singkat kualitas pemisahan cluster berdasarkan Silhouette, Davies-Bouldin, dan Inertia.",
+        key="clu_ai_explain",
+    )
     st.write("")
 
     t1, t2, t3 = st.tabs(["🎨 Visualisasi Cluster (PCA)", "📊 Profiling Cluster", "🔮 Prediksi Cluster Baru"])
@@ -787,6 +824,7 @@ PAGES = {
     "🔵 Clustering": page_clustering,
     "🔁 Update Data & Retraining": page_retrain,
     "💬 Diskusi Komentar": page_komentar,
+    "🤖 Asisten AI (Groq)": page_ai_assistant,
 }
 
 st.sidebar.markdown("### 👩‍🎓 Menu Navigasi")
@@ -803,5 +841,10 @@ else:
     st.sidebar.success("🟢 MongoDB: Terhubung")
     st.sidebar.caption(f"💬 {db.komentar.count_documents({})} komentar")
     st.sidebar.caption(f"📦 {db.models.count_documents({})} model tersimpan")
+
+if _secret("GROQ_API_KEY"):
+    st.sidebar.success("🟢 Groq AI: Aktif")
+else:
+    st.sidebar.warning("🟡 Groq AI: API Key belum diatur")
 
 PAGES[choice]()
