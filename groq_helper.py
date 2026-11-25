@@ -1,8 +1,9 @@
+from datetime import datetime, timedelta, timezone
 import json
 import os
 import streamlit as st
 from groq import Groq
-from datetime import datetime, timedelta, timezone
+
 
 def _get_groq_key():
     try:
@@ -165,7 +166,7 @@ def page_ai_assistant():
 
 
 # ----------------------------------------------------------------------------
-# Halaman Mini Kuis Machine Learning
+# Halaman Mini Kuis Machine Learning (+ Simpan Skor ke MongoDB)
 # ----------------------------------------------------------------------------
 DEFAULT_KUIS = [
     {
@@ -287,81 +288,6 @@ def buat_soal_kuis_groq(topik):
 
 
 def page_kuis_ml(db=None):
-    # ... (bagian judul, selectbox topik, dan tombol Groq tetap sama) ...
-
-    with st.form(f"form_kuis_{ver}"):
-        nama_peserta = st.text_input(
-            "Nama Peserta (untuk mencatat skor ke MongoDB)",
-            placeholder="Contoh: Hana",
-            max_chars=50,
-            key=f"kuis_nama_{ver}",
-        )
-        st.write("")
-
-        jawaban_user = []
-        for i, item in enumerate(soal_list):
-            st.markdown(f"**{i + 1}. {item['pertanyaan']}**")
-            pilih = st.radio(
-                f"Pilihan soal {i + 1}",
-                options=range(len(item["pilihan"])),
-                format_func=lambda idx, opts=item["pilihan"]: opts[idx],
-                index=None,
-                label_visibility="collapsed",
-                key=f"kuis_v{ver}_q{i}",
-            )
-            jawaban_user.append(pilih)
-            st.write("")
-
-        submitted = st.form_submit_button("✅ Periksa Jawaban", type="primary")
-
-    if submitted:
-        if any(j is None for j in jawaban_user):
-            st.warning("Mohon jawab semua pertanyaan terlebih dahulu sebelum memeriksa skor.")
-            return
-
-        benar = sum(1 for u, item in zip(jawaban_user, soal_list) if u == item["jawaban"])
-        total = len(soal_list)
-        skor = (benar / total) * 100
-
-        # Simpan otomatis ke MongoDB
-        if db is not None:
-            try:
-                db.riwayat_kuis.insert_one({
-                    "nama": nama_peserta.strip() or "Anonim",
-                    "paket": st.session_state["kuis_sumber"],
-                    "benar": int(benar),
-                    "total": int(total),
-                    "skor": float(skor),
-                    "created_at": datetime.now(timezone.utc),
-                })
-                st.toast("✅ Skor kuis tersimpan ke MongoDB!", icon="🏆")
-            except Exception as e:
-                st.warning(f"Skor gagal disimpan ke MongoDB: {e}")
-
-        # ... (bagian tampilan metrik skor & pembahasan tetap sama) ...
-
-    # Tampilkan Riwayat Skor / Leaderboard dari MongoDB di bagian bawah
-    if db is not None:
-        st.divider()
-        st.subheader("🏆 Riwayat Skor Kuis Terbaru (MongoDB)")
-        try:
-            riwayat = list(db.riwayat_kuis.find().sort("created_at", -1).limit(15))
-            if not riwayat:
-                st.info("Belum ada riwayat pengerjaan kuis tersimpan.")
-            else:
-                tabel = [
-                    {
-                        "Waktu": (r["created_at"] + timedelta(hours=7)).strftime("%d %b %Y %H:%M WIB"),
-                        "Nama": r.get("nama", "Anonim"),
-                        "Paket Soal": r.get("paket", "-"),
-                        "Benar": f"{r.get('benar', 0)}/{r.get('total', 5)}",
-                        "Skor": f"{r.get('skor', 0):.0f}",
-                    }
-                    for r in riwayat
-                ]
-                st.dataframe(tabel, use_container_width=True, hide_index=True)
-        except Exception as e:
-            st.error(f"Gagal memuat riwayat kuis: {e}")
     st.markdown(
         '<h1 class="main-title-container">📝 <span class="gradient-text">Mini Kuis Machine Learning</span></h1>',
         unsafe_allow_html=True,
@@ -418,6 +344,14 @@ def page_kuis_ml(db=None):
     ver = st.session_state["kuis_ver"]
 
     with st.form(f"form_kuis_{ver}"):
+        nama_peserta = st.text_input(
+            "Nama Peserta (untuk mencatat skor ke MongoDB)",
+            placeholder="Contoh: Hana",
+            max_chars=50,
+            key=f"kuis_nama_{ver}",
+        )
+        st.write("")
+
         jawaban_user = []
         for i, item in enumerate(soal_list):
             st.markdown(f"**{i + 1}. {item['pertanyaan']}**")
@@ -437,39 +371,78 @@ def page_kuis_ml(db=None):
     if submitted:
         if any(j is None for j in jawaban_user):
             st.warning("Mohon jawab semua pertanyaan terlebih dahulu sebelum memeriksa skor.")
-            return
-
-        benar = sum(1 for u, item in zip(jawaban_user, soal_list) if u == item["jawaban"])
-        total = len(soal_list)
-        skor = (benar / total) * 100
-
-        st.divider()
-        m1, m2 = st.columns(2)
-        m1.metric("Skor Akhir", f"{skor:.0f} / 100")
-        m2.metric("Jawaban Benar", f"{benar} dari {total} soal")
-        st.progress(benar / total)
-
-        if skor >= 80:
-            st.balloons()
-            st.success("🎉 Hebat! Pemahaman konsep Machine Learning Anda sudah sangat baik.")
-        elif skor >= 60:
-            st.info("👍 Cukup baik! Pelajari kembali pembahasan pada soal yang masih keliru di bawah ini.")
         else:
-            st.warning("📖 Yuk pelajari ulang kotak teori di tiap modul atau tanyakan ke Asisten AI (Groq), lalu coba lagi!")
+            benar = sum(1 for u, item in zip(jawaban_user, soal_list) if u == item["jawaban"])
+            total = len(soal_list)
+            skor = (benar / total) * 100
 
-        st.subheader("📋 Pembahasan Jawaban")
-        for i, (u, item) in enumerate(zip(jawaban_user, soal_list)):
-            kunci_idx = item["jawaban"]
-            kunci_teks = item["pilihan"][kunci_idx]
-            if u == kunci_idx:
-                st.success(
-                    f"**Soal {i + 1}: Benar** — Jawaban Anda: *{kunci_teks}*\n\n"
-                    f"💡 **Pembahasan:** {item['pembahasan']}"
-                )
+            if db is not None:
+                try:
+                    db.riwayat_kuis.insert_one({
+                        "nama": nama_peserta.strip() or "Anonim",
+                        "paket": st.session_state["kuis_sumber"],
+                        "benar": int(benar),
+                        "total": int(total),
+                        "skor": float(skor),
+                        "created_at": datetime.now(timezone.utc),
+                    })
+                    st.toast("✅ Skor kuis tersimpan ke MongoDB!", icon="🏆")
+                except Exception as e:
+                    st.warning(f"Skor gagal disimpan ke MongoDB: {e}")
+
+            st.divider()
+            m1, m2 = st.columns(2)
+            m1.metric("Skor Akhir", f"{skor:.0f} / 100")
+            m2.metric("Jawaban Benar", f"{benar} dari {total} soal")
+            st.progress(benar / total)
+
+            if skor >= 80:
+                st.balloons()
+                st.success("🎉 Hebat! Pemahaman konsep Machine Learning Anda sudah sangat baik.")
+            elif skor >= 60:
+                st.info("👍 Cukup baik! Pelajari kembali pembahasan pada soal yang masih keliru di bawah ini.")
             else:
-                user_teks = item["pilihan"][u]
-                st.error(
-                    f"**Soal {i + 1}: Kurang Tepat** — Jawaban Anda: *{user_teks}* | "
-                    f"Jawaban Benar: **{kunci_teks}**\n\n"
-                    f"💡 **Pembahasan:** {item['pembahasan']}"
-                )
+                st.warning("📖 Yuk pelajari ulang kotak teori di tiap modul atau tanyakan ke Asisten AI (Groq), lalu coba lagi!")
+
+            st.subheader("📋 Pembahasan Jawaban")
+            for i, (u, item) in enumerate(zip(jawaban_user, soal_list)):
+                kunci_idx = item["jawaban"]
+                kunci_teks = item["pilihan"][kunci_idx]
+                if u == kunci_idx:
+                    st.success(
+                        f"**Soal {i + 1}: Benar** — Jawaban Anda: *{kunci_teks}*\n\n"
+                        f"💡 **Pembahasan:** {item['pembahasan']}"
+                    )
+                else:
+                    user_teks = item["pilihan"][u]
+                    st.error(
+                        f"**Soal {i + 1}: Kurang Tepat** — Jawaban Anda: *{user_teks}* | "
+                        f"Jawaban Benar: **{kunci_teks}**\n\n"
+                        f"💡 **Pembahasan:** {item['pembahasan']}"
+                    )
+
+    if db is not None:
+        st.divider()
+        st.subheader("🏆 Riwayat Skor Kuis Terbaru (MongoDB)")
+        try:
+            riwayat = list(db.riwayat_kuis.find().sort("created_at", -1).limit(15))
+            if not riwayat:
+                st.info("Belum ada riwayat pengerjaan kuis tersimpan.")
+            else:
+                tabel = [
+                    {
+                        "Waktu": (
+                            (r["created_at"] + timedelta(hours=7)).strftime("%d %b %Y %H:%M WIB")
+                            if r.get("created_at")
+                            else "-"
+                        ),
+                        "Nama": r.get("nama", "Anonim"),
+                        "Paket Soal": r.get("paket", "-"),
+                        "Benar": f"{r.get('benar', 0)}/{r.get('total', 5)}",
+                        "Skor": f"{r.get('skor', 0):.0f}",
+                    }
+                    for r in riwayat
+                ]
+                st.dataframe(tabel, use_container_width=True, hide_index=True)
+        except Exception as e:
+            st.error(f"Gagal memuat riwayat kuis: {e}")
