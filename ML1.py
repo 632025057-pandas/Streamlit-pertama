@@ -5,7 +5,7 @@ Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi Groq AI (Asisten AI, analisis metrik, & analisis sentimen komentar via groq_helper.py)
 Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
 
-VERSI 3.0 - Mode Edukatif: Peta Konsep ML, Rumus & Teori tiap Modul,
+VERSI 3.1 - Mode Edukatif + Mini Kuis ML & Pertanyaan Cepat Asisten AI
             Tooltip Metrik, Interpretasi Otomatis, & Kamus Fitur Dataset
 """
 import os
@@ -47,7 +47,7 @@ from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
-from groq_helper import analisis_sentimen_komentar, page_ai_assistant, tanya_groq
+from groq_helper import analisis_sentimen_komentar, page_ai_assistant, page_kuis_ml, tanya_groq
 
 # ----------------------------------------------------------------------------
 # Konfigurasi Halaman
@@ -586,13 +586,23 @@ def page_home():
         st.button("🚀 Modul Clustering", key="btn_nav_clu", use_container_width=True, on_click=change_page, args=("🔵 Clustering",))
 
     st.write("")
-    st.markdown("""
-        <div class="custom-card">
-            <div class="card-title">🤖 Asisten AI (Groq)</div>
-            <div class="card-desc">Tutor interaktif untuk bertanya konsep Machine Learning, arti rumus matematika, hingga interpretasi metrik evaluasi model secara cepat.</div>
-        </div>
-    """, unsafe_allow_html=True)
-    st.button("💬 Buka Asisten AI (Groq)", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
+    a1, a2 = st.columns(2)
+    with a1:
+        st.markdown("""
+            <div class="custom-card">
+                <div class="card-title">🤖 Asisten AI (Groq)</div>
+                <div class="card-desc">Tutor interaktif dengan tombol pertanyaan cepat untuk belajar konsep ML, arti rumus matematika, dan interpretasi metrik evaluasi.</div>
+            </div>
+        """, unsafe_allow_html=True)
+        st.button("💬 Buka Asisten AI (Groq)", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
+    with a2:
+        st.markdown("""
+            <div class="custom-card">
+                <div class="card-title">📝 Mini Kuis Machine Learning</div>
+                <div class="card-desc">Uji pemahaman Regresi, Klasifikasi, Clustering, dan evaluasi model dengan pembahasan otomatis serta generator soal baru dari Groq AI.</div>
+            </div>
+        """, unsafe_allow_html=True)
+        st.button("🎯 Mulai Mini Kuis ML", key="btn_nav_kuis", use_container_width=True, on_click=change_page, args=("📝 Mini Kuis ML",))
 
     # --- PETA KONSEP EDUKATIF ---
     st.write("---")
@@ -1280,6 +1290,7 @@ PAGES = {
     "🔁 Update Data & Retraining": page_retrain,
     "💬 Diskusi Komentar": page_komentar,
     "🤖 Asisten AI (Groq)": page_ai_assistant,
+    "📝 Mini Kuis ML": page_kuis_ml,
 }
 
 st.sidebar.markdown("### 👩‍🎓 Menu Navigasi")
