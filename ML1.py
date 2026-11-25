@@ -75,7 +75,12 @@ def change_page(page_name):
 # ----------------------------------------------------------------------------
 st.markdown("""
     <style>
-    .stApp { background-color: #0e1117; }
+    .stApp {
+    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+}
+[data-testid="stHeader"] {
+    background: transparent;
+}
 
     .gradient-text {
         background: linear-gradient(90deg, #4F46E5, #06B6D4);
