@@ -1,3 +1,4 @@
+import json
 import os
 import streamlit as st
 from groq import Groq
@@ -59,3 +60,47 @@ def page_ai_assistant():
             else:
                 st.markdown("### 💬 Jawaban Groq")
                 st.write(jawaban)
+def analisis_sentimen_komentar(komentar_list):
+    """
+    Menerima list dict: [{"id": "...", "komentar": "..."}]
+    Mengembalikan tuple: (hasil_dict, error_str)
+    """
+    api_key = _get_groq_key()
+    if not api_key:
+        return None, "GROQ_API_KEY belum diatur di Streamlit Secrets."
+    if not komentar_list:
+        return None, "Tidak ada komentar untuk dianalisis."
+
+    system_prompt = (
+        "Kamu adalah analis sentimen komentar berbahasa Indonesia. "
+        "Analisis setiap komentar dan kembalikan HANYA objek JSON valid dengan format:\n"
+        "{\n"
+        '  "ringkasan": "ringkasan singkat 1-2 kalimat dari seluruh komentar",\n'
+        '  "hasil": [\n'
+        '    {"id": "id_komentar", "sentimen": "Positif", "alasan": "alasan sangat singkat 3-7 kata"}\n'
+        "  ]\n"
+        "}\n"
+        'Nilai "sentimen" WAJIB salah satu dari: "Positif", "Negatif", atau "Netral". '
+        "Tulis alasan dengan huruf kecil tanpa tanda titik di akhir, misalnya: "
+        '"menyatakan kepuasan dan memberi saran" atau "pertanyaan tanpa ekspresi emosi".'
+    )
+
+    try:
+        client = Groq(api_key=api_key)
+        response = client.chat.completions.create(
+            model="openai/gpt-oss-20b",
+            response_format={"type": "json_object"},
+            messages=[
+                {"role": "system", "content": system_prompt},
+                {
+                    "role": "user",
+                    "content": json.dumps(komentar_list, ensure_ascii=False),
+                },
+            ],
+            temperature=0.2,
+            max_tokens=1500,
+        )
+        raw = response.choices[0].message.content
+        return json.loads(raw), None
+    except Exception as e:
+        return None, f"Gagal menganalisis komentar dengan Groq: {e}"

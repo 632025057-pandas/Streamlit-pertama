@@ -783,37 +783,126 @@ def page_retrain():
             } for h in hist]), hide_index=True, use_container_width=True)
 
 # ============================================================================
-# HALAMAN: KOMENTAR
+# HALAMAN: KOMENTAR & ANALISIS SENTIMEN AI
 # ============================================================================
 def page_komentar():
-    st.markdown('<h1 class="main-title-container">💬 <span class="gradient-text">Diskusi & Komentar Publik</span></h1>', unsafe_allow_html=True)
+    st.markdown(
+        '<h1 class="main-title-container">💬 <span class="gradient-text">Komentar Publik dan Analisis AI</span></h1>',
+        unsafe_allow_html=True,
+    )
+    st.caption("Pengunjung dapat mengirim komentar yang disimpan di MongoDB. Groq LLM dapat merangkum komentar terbaru dan memberi label sentimen.")
+
     if db is None:
         st.error(f"Fitur ini membutuhkan MongoDB. Status: {db_error}")
         return
 
+    # Form kirim komentar
     with st.form("form_komentar", clear_on_submit=True):
-        nama = st.text_input("Nama Anda", max_chars=50)
-        isi = st.text_area("Tuliskan Komentar / Masukan", max_chars=500)
-        if st.form_submit_button("🚀 Kirim Komentar"):
+        nama = st.text_input("Nama atau nama panggilan", max_chars=50)
+        isi = st.text_area("Komentar", placeholder="Tulis komentar di sini...", max_chars=500)
+        if st.form_submit_button("Kirim komentar"):
             if not nama.strip() or not isi.strip():
                 st.warning("Mohon isi Nama dan Komentar.")
             else:
                 db.komentar.insert_one({
-                    "nama": nama.strip(), "komentar": isi.strip(),
+                    "nama": nama.strip(),
+                    "komentar": isi.strip(),
                     "created_at": datetime.now(timezone.utc),
                 })
                 st.toast("✅ Komentar terkirim!", icon="💬")
                 st.rerun()
 
-    st.subheader("💬 Tanggapan Pengunjung")
-    docs = list(db.komentar.find().sort("created_at", -1).limit(50))
+    docs = list(db.komentar.find().sort("created_at", -1).limit(30))
+
+    # Bagian analisis ringkasan dan sentimen
+    st.divider()
+    st.subheader("Analisis ringkasan dan sentimen")
+    st.caption(
+        "Analisis dilakukan saat tombol ditekan, terhadap maksimal 30 komentar terbaru. "
+        "Hasil sentimen AI adalah estimasi, bukan penilaian manusia yang pasti."
+    )
+
+    if st.button(
+        f"Analisis {len(docs)} komentar dengan Groq",
+        type="primary",
+        disabled=(len(docs) == 0),
+        key="btn_analisis_groq",
+    ):
+        payload = [{"id": str(d["_id"]), "komentar": d["komentar"]} for d in docs]
+        with st.spinner("Groq sedang menganalisis sentimen komentar..."):
+            hasil, err = analisis_sentimen_komentar(payload)
+
+        if err:
+            st.error(err)
+        else:
+            id_map = {str(d["_id"]): d["_id"] for d in docs}
+            for item in hasil.get("hasil", []):
+                oid = id_map.get(str(item.get("id")))
+                if oid is not None:
+                    sent = str(item.get("sentimen", "Netral")).strip().capitalize()
+                    if sent not in ("Positif", "Negatif", "Netral"):
+                        sent = "Netral"
+                    db.komentar.update_one(
+                        {"_id": oid},
+                        {
+                            "$set": {
+                                "sentimen": sent,
+                                "alasan_sentimen": str(item.get("alasan", "")).strip(),
+                                "analisis_oleh": "Groq",
+                            }
+                        },
+                    )
+
+            ringkasan = str(hasil.get("ringkasan", "")).strip()
+            if ringkasan:
+                db.ringkasan_komentar.replace_one(
+                    {"_id": "terbaru"},
+                    {
+                        "_id": "terbaru",
+                        "ringkasan": ringkasan,
+                        "penyedia": "Groq",
+                        "updated_at": datetime.now(timezone.utc),
+                    },
+                    upsert=True,
+                )
+            st.toast("✅ Analisis sentimen selesai!", icon="🤖")
+            st.rerun()
+
+    # Tampilkan ringkasan terakhir jika sudah pernah dianalisis
+    ringkasan_doc = db.ringkasan_komentar.find_one({"_id": "terbaru"})
+    if ringkasan_doc and ringkasan_doc.get("ringkasan"):
+        st.info(f"📝 **Ringkasan AI ({ringkasan_doc.get('penyedia', 'Groq')}):** {ringkasan_doc['ringkasan']}")
+
+    # Bagian daftar komentar terbaru + metrik sentimen
+    st.divider()
+    st.subheader("Komentar terbaru")
+
     if not docs:
         st.info("Belum ada komentar. Jadilah yang pertama!")
-    for d in docs:
-        with st.chat_message("user"):
-            st.markdown(f"**{d['nama']}** · _{now_wib(d['created_at'])}_")
-            st.text(d["komentar"])
+        return
 
+    n_pos = sum(1 for d in docs if d.get("sentimen") == "Positif")
+    n_neg = sum(1 for d in docs if d.get("sentimen") == "Negatif")
+    n_net = sum(1 for d in docs if d.get("sentimen") == "Netral")
+
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Positif", n_pos)
+    c2.metric("Negatif", n_neg)
+    c3.metric("Netral", n_net)
+    st.write("")
+
+    for d in docs:
+        with st.container(border=True):
+            st.markdown(f"**{d['nama']}** · _{now_wib(d['created_at'])}_")
+            st.write(d["komentar"])
+            if d.get("sentimen"):
+                alasan = d.get("alasan_sentimen", "")
+                penyedia = d.get("analisis_oleh", "Groq")
+                ket = f" · {alasan}" if alasan else ""
+                st.caption(f"Sentimen: {d['sentimen']} · Analisis: {penyedia}{ket}")
+            else:
+                st.caption("Sentimen: Belum dianalisis")
+                
 # ============================================================================
 # SIDEBAR & ROUTER
 # ============================================================================
