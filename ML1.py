@@ -1725,33 +1725,24 @@ with st.sidebar:
         except Exception:
             n_komen, n_model, n_kuis = 0, 0, 0
 
-        stats_html = f"""
-            <div class="mini-stats">
-                <div class="mini-stat-box">
-                    <div class="mini-stat-val">{n_komen}</div>
-                    <div class="mini-stat-lbl">Komentar</div>
-                </div>
-                <div class="mini-stat-box">
-                    <div class="mini-stat-val">{n_model}</div>
-                    <div class="mini-stat-lbl">Model</div>
-                </div>
-                <div class="mini-stat-box">
-                    <div class="mini-stat-val">{n_kuis}</div>
-                    <div class="mini-stat-lbl">Kuis</div>
-                </div>
-            </div>
-        """
+        stats_html = (
+            '<div class="mini-stats">'
+            f'<div class="mini-stat-box"><div class="mini-stat-val">{n_komen}</div><div class="mini-stat-lbl">Komentar</div></div>'
+            f'<div class="mini-stat-box"><div class="mini-stat-val">{n_model}</div><div class="mini-stat-lbl">Model</div></div>'
+            f'<div class="mini-stat-box"><div class="mini-stat-val">{n_kuis}</div><div class="mini-stat-lbl">Kuis</div></div>'
+            '</div>'
+        )
     else:
         stats_html = ""
 
     st.markdown(
-        f"""
-        <div class="status-panel">
-            <div class="status-row"><span>🍃 MongoDB Atlas</span>{mongo_badge}</div>
-            <div class="status-row"><span>⚡ Groq LLM</span>{groq_badge}</div>
-            {stats_html}
-        </div>
-        """,
+        (
+            '<div class="status-panel">'
+            f'<div class="status-row"><span>🍃 MongoDB Atlas</span>{mongo_badge}</div>'
+            f'<div class="status-row"><span>⚡ Groq LLM</span>{groq_badge}</div>'
+            f'{stats_html}'
+            '</div>'
+        ),
         unsafe_allow_html=True,
     )
 
