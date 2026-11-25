@@ -533,6 +533,252 @@ def render_ai_insight(ringkasan, key):
             st.success(jawaban)
 
 
+# ============================================================================
+# PENJELASAN MATEMATIKA INTERAKTIF (HITUNG MANUAL DARI HASIL MODEL PENGGUNA)
+# ============================================================================
+def _bagi(a, b):
+    """Pembagian aman: hasil 0 jika penyebut 0."""
+    return a / b if b else 0.0
+
+
+def _cek_cocok(manual, dari_model, nama):
+    if abs(manual - dari_model) < 1e-6:
+        st.success(f"✅ Hasil hitung manual **{nama} = {manual:.4f}** sama persis dengan kartu metrik di atas.")
+    else:
+        st.info(f"ℹ️ Hitung manual {nama} = {manual:.4f}, kartu metrik = {dari_model:.4f} (selisih kecil karena pembulatan/metode).")
+
+
+def math_regresi(res, feats):
+    y = np.asarray(res["y_test"], dtype=float)
+    yh = np.asarray(res["pred"], dtype=float)
+    e = y - yh
+    n = len(y)
+    model = res["model"]
+
+    with st.expander("🧮 Penjelasan Matematika: Hitung Manual dari Hasil Model Anda"):
+        st.caption("Semua angka di bawah diambil langsung dari model yang sedang aktif dan akan berubah saat dataset / test size diubah.")
+
+        # ---- Langkah 1: dari mana prediksi berasal
+        st.markdown(r"#### Langkah 1 — Dari mana prediksi $\hat{y}$ berasal?")
+        idx = int(st.number_input("Pilih data uji ke-", min_value=1, max_value=n, value=1, step=1, key="math_reg_idx"))
+        xi = np.asarray(res["X_test"].iloc[idx - 1], dtype=float)
+        coef = np.asarray(model.coef_, dtype=float).ravel()
+        b0 = float(model.intercept_)
+        kontribusi = coef * xi
+        st.dataframe(
+            pd.DataFrame({"Fitur": feats, "Koefisien (β)": coef, "Nilai Fitur (x)": xi, "Kontribusi (β × x)": kontribusi}),
+            hide_index=True, use_container_width=True,
+        )
+        pred_manual = b0 + kontribusi.sum()
+        st.latex(rf"\hat{{y}} = \beta_0 + \sum_i \beta_i x_i = {b0:.4f} + ({kontribusi.sum():.4f}) = {pred_manual:.4f}")
+        st.caption(
+            f"Nilai aktual data ini **{y[idx - 1]:.4f}**, sehingga error = {y[idx - 1]:.4f} − {pred_manual:.4f} = **{y[idx - 1] - pred_manual:.4f}**."
+        )
+
+        # ---- Langkah 2: MAE, MSE, RMSE
+        st.markdown("#### Langkah 2 — Menghitung MAE, MSE & RMSE")
+        n_show = min(5, n)
+        contoh = pd.DataFrame({
+            "Aktual (y)": y[:n_show],
+            "Prediksi (ŷ)": yh[:n_show],
+            "Error (y − ŷ)": e[:n_show],
+            "|Error|": np.abs(e[:n_show]),
+            "Error²": e[:n_show] ** 2,
+        })
+        contoh.index = [f"Data {i + 1}" for i in range(n_show)]
+        st.dataframe(contoh, use_container_width=True)
+        st.caption(f"Tabel hanya menampilkan {n_show} dari {n} data uji sebagai contoh. Rumus di bawah memakai seluruh {n} data uji.")
+        sum_abs, sum_sq = np.abs(e).sum(), (e ** 2).sum()
+        mae, mse = sum_abs / n, sum_sq / n
+        rmse = mse ** 0.5
+        st.latex(rf"\text{{MAE}} = \frac{{\sum |y_i - \hat{{y}}_i|}}{{n}} = \frac{{{sum_abs:.2f}}}{{{n}}} = {mae:.4f}")
+        st.latex(rf"\text{{MSE}} = \frac{{\sum (y_i - \hat{{y}}_i)^2}}{{n}} = \frac{{{sum_sq:.2f}}}{{{n}}} = {mse:.4f}")
+        st.latex(rf"\text{{RMSE}} = \sqrt{{\text{{MSE}}}} = \sqrt{{{mse:.4f}}} = {rmse:.4f}")
+        st.caption(
+            f"💡 RMSE ({rmse:.4f}) selalu ≥ MAE ({mae:.4f}). Semakin besar selisihnya, semakin banyak "
+            "kesalahan besar yang 'dihukum' lebih berat karena dikuadratkan."
+        )
+
+        # ---- Langkah 3: R²
+        st.markdown(r"#### Langkah 3 — Menghitung $R^2$")
+        ybar = y.mean()
+        ss_res = (e ** 2).sum()
+        ss_tot = ((y - ybar) ** 2).sum()
+        r2 = 1 - ss_res / ss_tot
+        st.markdown(
+            rf"- $SS_{{res}}$ = total kuadrat error **model** = {ss_res:.2f}" "\n"
+            rf"- $SS_{{tot}}$ = total kuadrat error jika **selalu menebak rata-rata** $\bar{{y}} = {ybar:.4f}$ = {ss_tot:.2f}"
+        )
+        st.latex(rf"R^2 = 1 - \frac{{SS_{{res}}}}{{SS_{{tot}}}} = 1 - \frac{{{ss_res:.2f}}}{{{ss_tot:.2f}}} = {r2:.4f}")
+        if r2 >= 0:
+            st.caption(f"💡 Model mengurangi total kesalahan kuadrat sebesar **{r2 * 100:.1f}%** dibandingkan hanya menebak nilai rata-rata.")
+        else:
+            st.caption("💡 R² negatif: model ini **lebih buruk** daripada sekadar menebak nilai rata-rata.")
+        _cek_cocok(r2, res["metrics"]["R² Score"], "R²")
+
+
+def math_klasifikasi(res, tn):
+    cm = np.asarray(res["cm"], dtype=int)
+    names = [tn[c] if tn else str(c) for c in res["classes"]]
+    total = int(cm.sum())
+
+    with st.expander("🧮 Penjelasan Matematika: Hitung Manual dari Confusion Matrix Anda"):
+        st.caption("Semua angka di bawah diambil dari Confusion Matrix model yang sedang aktif.")
+
+        # ---- Langkah 1: Accuracy
+        st.markdown("#### Langkah 1 — Accuracy dari diagonal Confusion Matrix")
+        st.dataframe(
+            pd.DataFrame(cm, index=[f"Aktual: {x}" for x in names], columns=[f"Prediksi: {x}" for x in names]),
+            use_container_width=True,
+        )
+        benar = int(np.trace(cm))
+        st.latex(rf"\text{{Accuracy}} = \frac{{\text{{jumlah diagonal}}}}{{\text{{total data uji}}}} = \frac{{{benar}}}{{{total}}} = {benar / total:.4f}")
+
+        # ---- Langkah 2: Precision / Recall / F1 satu kelas
+        st.markdown("#### Langkah 2 — Precision, Recall & F1 untuk satu kelas")
+        st.caption("Untuk menghitung metrik satu kelas, kelas itu dianggap 'positif' dan kelas lainnya dianggap 'negatif'.")
+        pilih = st.selectbox("Kelas yang dianggap positif:", range(len(names)), format_func=lambda i: names[i], key="math_clf_cls")
+        TP = int(cm[pilih, pilih])
+        FP = int(cm[:, pilih].sum() - TP)
+        FN = int(cm[pilih, :].sum() - TP)
+        TN = total - TP - FP - FN
+        c1, c2, c3, c4 = st.columns(4)
+        c1.metric("TP", TP, help=f"Sebenarnya '{names[pilih]}' dan ditebak '{names[pilih]}'.")
+        c2.metric("FP", FP, help=f"Sebenarnya BUKAN '{names[pilih]}' tetapi ditebak '{names[pilih]}'.")
+        c3.metric("FN", FN, help=f"Sebenarnya '{names[pilih]}' tetapi ditebak kelas lain (terlewat).")
+        c4.metric("TN", TN, help="Bukan kelas ini dan memang tidak ditebak sebagai kelas ini.")
+        p = _bagi(TP, TP + FP)
+        r = _bagi(TP, TP + FN)
+        f1 = _bagi(2 * p * r, p + r)
+        st.latex(rf"\text{{Precision}} = \frac{{TP}}{{TP + FP}} = \frac{{{TP}}}{{{TP} + {FP}}} = {p:.4f}")
+        st.latex(rf"\text{{Recall}} = \frac{{TP}}{{TP + FN}} = \frac{{{TP}}}{{{TP} + {FN}}} = {r:.4f}")
+        st.latex(rf"F_1 = 2 \times \frac{{{p:.4f} \times {r:.4f}}}{{{p:.4f} + {r:.4f}}} = {f1:.4f}")
+        st.caption(
+            f"💡 Dari semua data yang **ditebak** '{names[pilih]}', **{p * 100:.1f}%** memang benar (Precision). "
+            f"Dari semua data yang **sebenarnya** '{names[pilih]}', **{r * 100:.1f}%** berhasil ditemukan (Recall)."
+            + (f" Ada **{FN}** data yang terlewat (FN)." if FN else "")
+        )
+
+        # ---- Langkah 3: Macro average
+        st.markdown("#### Langkah 3 — Dari per kelas menjadi satu angka (Macro Average)")
+        baris, P, R, F = [], [], [], []
+        for i, nm in enumerate(names):
+            tp = int(cm[i, i])
+            fp = int(cm[:, i].sum() - tp)
+            fn = int(cm[i, :].sum() - tp)
+            pi, ri = _bagi(tp, tp + fp), _bagi(tp, tp + fn)
+            fi = _bagi(2 * pi * ri, pi + ri)
+            P.append(pi); R.append(ri); F.append(fi)
+            baris.append({"Kelas": nm, "TP": str(tp), "FP": str(fp), "FN": str(fn), "Precision": pi, "Recall": ri, "F1": fi})
+        baris.append({"Kelas": "Rata-rata (macro)", "TP": "-", "FP": "-", "FN": "-",
+                      "Precision": np.mean(P), "Recall": np.mean(R), "F1": np.mean(F)})
+        st.dataframe(pd.DataFrame(baris), hide_index=True, use_container_width=True)
+        k = len(names)
+        suku_p = " + ".join(f"{v:.4f}" for v in P)
+        st.latex(rf"\text{{Precision}}_{{macro}} = \frac{{{suku_p}}}{{{k}}} = {np.mean(P):.4f}")
+        st.caption(
+            "💡 Macro average memberi bobot **sama** pada setiap kelas, jadi kelas kecil sama pentingnya dengan kelas besar. "
+            "F1 macro adalah rata-rata F1 tiap kelas (bukan F1 dari Precision & Recall macro)."
+        )
+        _cek_cocok(float(np.mean(P)), res["metrics"]["Precision"], "Precision")
+        _cek_cocok(float(np.mean(R)), res["metrics"]["Recall"], "Recall")
+        _cek_cocok(float(np.mean(F)), res["metrics"]["F1 Score"], "F1 Score")
+
+
+def math_clustering(res, df):
+    from sklearn.metrics import silhouette_samples
+
+    X = df.drop(columns="target", errors="ignore")
+    feats = list(X.columns)
+    sc, km = res["scaler"], res["model"]
+    Xs = sc.transform(X)
+    labels = np.asarray(res["labels"])
+    cent = km.cluster_centers_
+    k = len(cent)
+    n = len(Xs)
+
+    with st.expander("🧮 Penjelasan Matematika: Hitung Manual dari Hasil K-Means Anda"):
+        st.caption("Semua angka di bawah diambil dari model K-Means yang sedang aktif.")
+        idx = int(st.number_input("Pilih titik data ke-", min_value=1, max_value=n, value=1, step=1, key="math_clu_idx")) - 1
+
+        # ---- Langkah 1: standarisasi
+        st.markdown("#### Langkah 1 — Standarisasi fitur (StandardScaler)")
+        z = Xs[idx]
+        st.dataframe(
+            pd.DataFrame({
+                "Fitur": feats,
+                "Nilai asli (x)": X.iloc[idx].values.astype(float),
+                "Rata-rata (μ)": sc.mean_,
+                "Std (σ)": sc.scale_,
+                "Hasil z = (x − μ) / σ": z,
+            }),
+            hide_index=True, use_container_width=True,
+        )
+        x0, m0, s0 = float(X.iloc[idx, 0]), float(sc.mean_[0]), float(sc.scale_[0])
+        st.latex(rf"z_{{1}} = \frac{{x - \mu}}{{\sigma}} = \frac{{{x0:.4f} - {m0:.4f}}}{{{s0:.4f}}} = {z[0]:.4f}")
+        st.caption("Contoh perhitungan untuk fitur pertama. Setelah ini semua fitur berskala sebanding sehingga adil dalam perhitungan jarak.")
+
+        # ---- Langkah 2: jarak ke centroid
+        st.markdown("#### Langkah 2 — Jarak ke setiap centroid & penentuan cluster")
+        d_cent = np.linalg.norm(cent - z, axis=1)
+        st.dataframe(
+            pd.DataFrame({"Cluster": range(k), "Jarak Euclidean ke centroid": d_cent}).sort_values("Jarak Euclidean ke centroid"),
+            hide_index=True, use_container_width=True,
+        )
+        j = int(np.argmin(d_cent))
+        st.latex(rf"d(x, \mu_j) = \sqrt{{\sum_i (z_i - \mu_{{j,i}})^2}} \;\Rightarrow\; \min = {d_cent[j]:.4f} \text{{ (cluster {j})}}")
+        st.caption(f"💡 Titik terdekat dengan centroid cluster **{j}**; label dari K-Means: **{int(labels[idx])}**.")
+
+        # ---- Langkah 3: Inertia
+        st.markdown("#### Langkah 3 — Inertia (WCSS)")
+        sse = [float(((Xs[labels == c] - cent[c]) ** 2).sum()) for c in range(k)]
+        st.dataframe(
+            pd.DataFrame({"Cluster": range(k), "Jumlah anggota": [int((labels == c).sum()) for c in range(k)], "SSE cluster": sse}),
+            hide_index=True, use_container_width=True,
+        )
+        st.latex(rf"J = \sum_{{j=1}}^{{k}} \sum_{{x_i \in C_j}} \|x_i - \mu_j\|^2 = {' + '.join(f'{v:.2f}' for v in sse)} = {sum(sse):.4f}")
+        _cek_cocok(sum(sse), res["metrics"]["Inertia"], "Inertia")
+
+        # ---- Langkah 4: Silhouette
+        st.markdown(f"#### Langkah 4 — Silhouette untuk titik data ke-{idx + 1}")
+        d = np.linalg.norm(Xs - z, axis=1)
+        sama = labels == labels[idx]
+        a = d[sama].sum() / (sama.sum() - 1) if sama.sum() > 1 else 0.0
+        lain = {int(c): float(d[labels == c].mean()) for c in np.unique(labels) if c != labels[idx]}
+        st.markdown(f"- **a(i)** = rata-rata jarak ke anggota lain di cluster yang sama (cluster {int(labels[idx])}) = **{a:.4f}**")
+        st.markdown("- Rata-rata jarak ke cluster lain: " + ", ".join(f"cluster {c} = {v:.4f}" for c, v in lain.items()))
+        if lain and sama.sum() > 1:
+            b = min(lain.values())
+            s_i = (b - a) / max(a, b)
+            st.latex(rf"s(i) = \frac{{b(i) - a(i)}}{{\max(a(i), b(i))}} = \frac{{{b:.4f} - {a:.4f}}}{{{max(a, b):.4f}}} = {s_i:.4f}")
+            if s_i >= 0.5:
+                st.caption("💡 Nilai mendekati 1: titik ini sangat cocok berada di clusternya.")
+            elif s_i >= 0:
+                st.caption("💡 Nilai kecil positif: titik ini berada dekat batas antar cluster.")
+            else:
+                st.caption("💡 Nilai negatif: titik ini justru lebih dekat ke cluster lain (kemungkinan salah cluster).")
+        s_all = silhouette_samples(Xs, labels)
+        st.caption(
+            f"Silhouette Score model = rata-rata s(i) dari seluruh **{n}** titik = **{s_all.mean():.4f}**. "
+            f"Terdapat **{int((s_all < 0).sum())}** titik dengan s(i) negatif."
+        )
+        _cek_cocok(float(s_all.mean()), res["metrics"]["Silhouette"], "Silhouette")
+
+        # ---- Langkah 5: Davies-Bouldin
+        st.markdown("#### Langkah 5 — Davies-Bouldin Index")
+        sp = [float(np.linalg.norm(Xs[labels == c] - cent[c], axis=1).mean()) for c in range(k)]
+        Rij = []
+        for c in range(k):
+            Rij.append(max((sp[c] + sp[o]) / np.linalg.norm(cent[c] - cent[o]) for o in range(k) if o != c))
+        st.dataframe(
+            pd.DataFrame({"Cluster": range(k), "Sebaran S (rata-rata jarak ke centroid)": sp, "R terburuk (dengan cluster lain)": Rij}),
+            hide_index=True, use_container_width=True,
+        )
+        st.latex(rf"DB = \frac{{1}}{{k}} \sum_{{i=1}}^{{k}} \max_{{j \neq i}} \frac{{S_i + S_j}}{{d(\mu_i, \mu_j)}} = {np.mean(Rij):.4f}")
+        st.caption("💡 Semakin **kecil** DB, semakin padat tiap cluster dan semakin jauh antar centroid.")
+        _cek_cocok(float(np.mean(Rij)), res["metrics"]["Davies-Bouldin"], "Davies-Bouldin")
+
+
 def select_data(task, key_prefix):
     c1, c2 = st.columns([1, 2])
     name = c1.selectbox("Pilih Dataset (scikit-learn)", TASK_DATASETS[task], key=f"{key_prefix}_ds")
@@ -715,6 +961,7 @@ def page_regresi():
     )
     st.write("")
 
+    math_regresi(res, feats)
     t1, t2, t3 = st.tabs(["📊 Dataset Overview", "📈 Grafik & Koefisien", "🔮 Simulator Prediksi"])
 
     with t1:
@@ -835,6 +1082,7 @@ def page_klasifikasi():
     )
     st.write("")
 
+    math_klasifikasi(res, tn)
     t1, t2, t3 = st.tabs(["📊 Distribusi Data", "🎯 Confusion Matrix", "🔮 Simulator Prediksi"])
 
     with t1:
@@ -944,6 +1192,7 @@ def page_clustering():
     )
     st.write("")
 
+    math_clustering(res, df)
     t1, t2, t3 = st.tabs(["🎨 Visualisasi Cluster (PCA)", "📊 Profiling Cluster", "🔮 Prediksi Cluster Baru"])
 
     with t1:
