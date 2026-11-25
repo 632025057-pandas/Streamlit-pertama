@@ -45,8 +45,7 @@ from sklearn.neighbors import KNeighborsClassifier
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
-
-from groq_helper import page_ai_assistant, tanya_groq
+from groq_helper import analisis_sentimen_komentar, page_ai_assistant, tanya_groq
 
 # ----------------------------------------------------------------------------
 # Konfigurasi Halaman
