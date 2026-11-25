@@ -1290,7 +1290,7 @@ PAGES = {
     "🔁 Update Data & Retraining": page_retrain,
     "💬 Diskusi Komentar": page_komentar,
     "🤖 Asisten AI (Groq)": page_ai_assistant,
-    "📝 Mini Kuis ML": page_kuis_ml,
+    "📝 Mini Kuis ML": lambda: page_kuis_ml(db),
 }
 
 st.sidebar.markdown("### 👩‍🎓 Menu Navigasi")
