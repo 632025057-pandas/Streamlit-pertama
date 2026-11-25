@@ -469,7 +469,8 @@ def load_base(name):
         feats = feats[:6]
     elif name == "Breast Cancer":
         feats = feats[:8]
-    df = d.frame[feats + ["target"]].copy()
+    df = d.data[feats].copy()
+    df["target"] = d.target.values
     return df, feats, tn
 
 
