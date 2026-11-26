@@ -76,205 +76,257 @@ def change_page(page_name):
 
 
 # ----------------------------------------------------------------------------
-# Custom CSS - Modern Dark Theme + Modern Sidebar
+# Custom CSS - Tema Ungu Lilac Terang + Modern Sidebar
 # ----------------------------------------------------------------------------
+LILAC_COLORS = [
+    "#7c3aed", "#c084fc", "#6366f1", "#d946ef", "#8b5cf6",
+    "#a855f7", "#0ea5e9", "#f43f5e", "#10b981", "#f59e0b",
+]
+LILAC_SCALE = [[0.0, "#f5f0ff"], [0.5, "#a78bfa"], [1.0, "#4c1d95"]]
+_lilac_tpl = copy.deepcopy(pio.templates["plotly_white"])
+_lilac_tpl.layout.colorway = LILAC_COLORS
+_lilac_tpl.layout.font.color = "#2e1065"
+_lilac_tpl.layout.xaxis.gridcolor = "rgba(124, 58, 237, 0.12)"
+_lilac_tpl.layout.yaxis.gridcolor = "rgba(124, 58, 237, 0.12)"
+pio.templates["lilac"] = _lilac_tpl
+
 st.markdown("""
-    <style>
-    .stApp {
-    background: linear-gradient(135deg, #0f172a 0%, #1e1b4b 50%, #0f172a 100%);
+<style>
+:root {
+    --bg-0: #fbf9ff;
+    --bg-1: #f3ecff;
+    --surface: #ffffff;
+    --surface-2: #f6f2ff;
+    --border: #e5daf9;
+    --txt: #2e1065;
+    --muted: #5b4b7a;
+    --dim: #7c6f96;
+    --lilac: #7c3aed;
+    --lilac-2: #6d28d9;
+    --violet: #8b5cf6;
+    --violet-2: #a78bfa;
+    --fuchsia: #c084fc;
+}
+
+.stApp {
+    background: linear-gradient(135deg, var(--bg-0) 0%, var(--bg-1) 50%, var(--bg-0) 100%);
+    background-attachment: fixed;
+    color: var(--txt);
 }
 [data-testid="stHeader"] {
-    background: transparent;
+    background: rgba(251, 249, 255, 0.85);
 }
 
-    .gradient-text {
-        background: linear-gradient(90deg, #4F46E5, #06B6D4);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        font-weight: 800;
-    }
-    .main-title-container {
-        font-size: 2.5rem;
-        font-weight: 800;
-        margin-bottom: 0.2rem;
-    }
-    .custom-card {
-        background-color: #1f2937;
-        border-radius: 12px;
-        padding: 20px;
-        border: 1px solid #374151;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        transition: transform 0.2s ease, box-shadow 0.2s ease;
-        margin-bottom: 10px;
-        height: 100%;
-    }
-    .custom-card:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.3);
-        border-color: #4F46E5;
-    }
-    .card-title {
-        color: #f3f4f6;
-        font-size: 1.1rem;
-        font-weight: 600;
-        margin-bottom: 8px;
-    }
-    .card-desc { color: #9ca3af; font-size: 0.9rem; }
+.gradient-text {
+    background: linear-gradient(90deg, #6d28d9, #a855f7);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
+}
+.main-title-container {
+    font-size: 2.5rem;
+    font-weight: 800;
+    margin-bottom: 0.2rem;
+    color: var(--txt);
+}
 
-    [data-testid="stMetricValue"] {
-        font-size: 1.8rem; font-weight: 700; color: #38bdf8;
-    }
-    [data-testid="stMetric"] {
-        background-color: #1e293b;
-        border: 1px solid #334155;
-        padding: 12px 16px;
-        border-radius: 10px;
-    }
-    .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-    .stTabs [data-baseweb="tab"] {
-        border-radius: 8px; padding: 8px 16px; background-color: #1e293b;
-    }
-    .stTabs [aria-selected="true"] {
-        background-color: #4f46e5 !important; color: white !important;
-    }
-    .footer {
-        text-align: center; color: #6b7280; font-size: 0.85rem;
-        padding: 20px 0 10px 0; border-top: 1px solid #1f2937; margin-top: 40px;
-    }
+/* === KARTU DASHBOARD === */
+.custom-card {
+    background: linear-gradient(180deg, #ffffff, #faf7ff);
+    border-radius: 14px;
+    padding: 20px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 14px rgba(124, 58, 237, 0.07);
+    transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+    margin-bottom: 10px;
+    height: 100%;
+}
+.custom-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 10px 22px rgba(124, 58, 237, 0.16);
+    border-color: var(--violet);
+}
+.card-title { color: #3b0764; font-size: 1.1rem; font-weight: 700; margin-bottom: 8px; }
+.card-desc { color: var(--muted); font-size: 0.9rem; }
 
-    /* === MODERN SIDEBAR === */
-    [data-testid="stSidebar"] {
-        background-color: #111827;
-        border-right: 1px solid #1f2937;
-    }
-    [data-testid="stSidebar"] [data-testid="stVerticalBlock"] {
-        gap: 0.38rem;
-    }
-    .sidebar-brand {
-        background: linear-gradient(135deg, rgba(79,70,229,0.22), rgba(6,182,212,0.16));
-        border: 1px solid rgba(99,102,241,0.35);
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 10px;
-    }
-    .sidebar-brand-title {
-        font-size: 1.05rem;
-        font-weight: 800;
-        color: #f8fafc;
-        margin: 0;
-    }
-    .sidebar-brand-sub {
-        font-size: 0.78rem;
-        color: #94a3b8;
-        margin-top: 3px;
-    }
-    .sidebar-section {
-        font-size: 0.7rem;
-        font-weight: 700;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: #64748b;
-        margin: 12px 0 4px 4px;
-    }
-    [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
-    [data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
-    [data-testid="stSidebar"] button[kind="secondary"] {
-        background-color: transparent;
-        border: 1px solid transparent;
-        color: #cbd5e1;
-        justify-content: flex-start;
-        padding: 0.42rem 0.75rem;
-        border-radius: 10px;
-        font-weight: 500;
-        transition: all 0.18s ease;
-    }
-    [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover,
-    [data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover,
-    [data-testid="stSidebar"] button[kind="secondary"]:hover {
-        background-color: #1e293b;
-        border-color: #334155;
-        color: #ffffff;
-        transform: translateX(3px);
-    }
-    [data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
-    [data-testid="stSidebar"] button[data-testid="baseButton-primary"],
-    [data-testid="stSidebar"] button[kind="primary"] {
-        background: linear-gradient(90deg, #4f46e5, #0891b2);
-        border: none;
-        color: #ffffff;
-        justify-content: flex-start;
-        padding: 0.42rem 0.75rem;
-        border-radius: 10px;
-        font-weight: 600;
-        box-shadow: 0 4px 12px rgba(79, 70, 229, 0.35);
-    }
-    .status-panel {
-        background-color: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 12px;
-        padding: 12px 14px;
-        margin-top: 14px;
-    }
-    .status-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        font-size: 0.82rem;
-        color: #cbd5e1;
-        padding: 4px 0;
-    }
-    .badge-ok {
-        background: rgba(16, 185, 129, 0.15);
-        color: #34d399;
-        border: 1px solid rgba(16, 185, 129, 0.35);
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-    .badge-warn {
-        background: rgba(245, 158, 11, 0.15);
-        color: #fbbf24;
-        border: 1px solid rgba(245, 158, 11, 0.35);
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-    .badge-err {
-        background: rgba(239, 68, 68, 0.15);
-        color: #f87171;
-        border: 1px solid rgba(239, 68, 68, 0.35);
-        padding: 2px 8px;
-        border-radius: 999px;
-        font-size: 0.72rem;
-        font-weight: 600;
-    }
-    .mini-stats {
-        display: grid;
-        grid-template-columns: repeat(3, 1fr);
-        gap: 6px;
-        margin-top: 10px;
-        padding-top: 10px;
-        border-top: 1px solid #1e293b;
-        text-align: center;
-    }
-    .mini-stat-box {
-        background: #1e293b;
-        border-radius: 8px;
-        padding: 6px 4px;
-    }
-    .mini-stat-val {
-        font-size: 0.95rem;
-        font-weight: 700;
-        color: #38bdf8;
-        line-height: 1.2;
-    }
-    .mini-stat-lbl {
-        font-size: 0.68rem;
-        color: #94a3b8;
-    }
-    </style>
+/* === METRIK & TABS === */
+[data-testid="stMetricLabel"] { color: var(--muted) !important; font-weight: 600; }
+[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 700; color: var(--lilac-2) !important; }
+[data-testid="stMetric"] {
+    background-color: var(--surface);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--violet);
+    padding: 12px 16px;
+    border-radius: 10px;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.05);
+}
+
+.stTabs [data-baseweb="tab-list"] { gap: 8px; }
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px;
+    padding: 8px 18px;
+    background-color: #ede4ff;
+    color: #4c1d95;
+    font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa) !important;
+    color: #ffffff !important;
+}
+.stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
+
+/* === EXPANDER, TABEL, ALERT, TOMBOL === */
+[data-testid="stExpander"] {
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    background: var(--surface);
+}
+[data-testid="stExpander"] summary { color: #4c1d95; font-weight: 700; }
+[data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+[data-testid="stAlert"] { border-radius: 12px; }
+[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) {
+    background: #f3ecff;
+    border: 1px solid #d8c7f7;
+    color: #3b0764;
+}
+
+.stButton > button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    border: none;
+    color: #ffffff;
+    font-weight: 600;
+    border-radius: 10px;
+    box-shadow: 0 4px 10px rgba(124, 58, 237, 0.22);
+}
+.stButton > button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover {
+    background: linear-gradient(90deg, #6d28d9, #9333ea);
+}
+.stButton > button[kind="secondary"], .stButton > button[data-testid="stBaseButton-secondary"] {
+    background-color: var(--surface-2);
+    border: 1px solid #d8c7f7;
+    color: #4c1d95;
+    font-weight: 600;
+    border-radius: 10px;
+}
+.stButton > button[kind="secondary"]:hover, .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+    background-color: #ede4ff;
+    border-color: var(--violet);
+    color: #3b0764;
+}
+hr { border-color: var(--border) !important; }
+
+.footer {
+    text-align: center;
+    color: var(--dim);
+    font-size: 0.85rem;
+    padding: 20px 0 10px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 40px;
+}
+.gal-best {
+    background: linear-gradient(135deg, #f5f0ff, #ede4ff);
+    border: 1px solid #d4c2fa;
+    border-left: 5px solid var(--violet);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 6px 0 14px 0;
+}
+.gal-best-title { font-weight: 800; color: #3b0764; font-size: 1.05rem; }
+.gal-best-sub { color: var(--muted); font-size: 0.88rem; margin-top: 4px; }
+
+/* === MODERN SIDEBAR LILAC TERANG === */
+[data-testid="stSidebar"] {
+    background: linear-gradient(180deg, #f3ecff 0%, #ebe1fc 100%);
+    border-right: 1px solid #ddd0f8;
+}
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.38rem; }
+
+.sidebar-brand {
+    background: linear-gradient(135deg, #ffffff, #f8f4ff);
+    border: 1px solid #d8c7f7;
+    border-radius: 14px;
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    box-shadow: 0 2px 10px rgba(124, 58, 237, 0.08);
+}
+.sidebar-brand-title { font-size: 1.05rem; font-weight: 800; color: #3b0764; margin: 0; }
+.sidebar-brand-sub { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+
+.sidebar-section {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--dim);
+    margin: 12px 0 4px 4px;
+}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
+[data-testid="stSidebar"] button[kind="secondary"] {
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: #3b0764;
+    justify-content: flex-start;
+    padding: 0.42rem 0.75rem;
+    border-radius: 10px;
+    font-weight: 500;
+    transition: all 0.18s ease;
+}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover,
+[data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover,
+[data-testid="stSidebar"] button[kind="secondary"]:hover {
+    background-color: #e4d7fb;
+    border-color: #d4c2fa;
+    color: #2e1065;
+    transform: translateX(3px);
+}
+[data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
+[data-testid="stSidebar"] button[data-testid="baseButton-primary"],
+[data-testid="stSidebar"] button[kind="primary"] {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    border: none;
+    color: #ffffff;
+    justify-content: flex-start;
+    padding: 0.42rem 0.75rem;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.30);
+}
+
+.status-panel {
+    background-color: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 12px 14px;
+    margin-top: 14px;
+    box-shadow: 0 2px 8px rgba(124, 58, 237, 0.06);
+}
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.82rem;
+    color: #3b0764;
+    font-weight: 600;
+    padding: 4px 0;
+}
+.badge-ok { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge-warn { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge-err { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+
+.mini-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid var(--border);
+    text-align: center;
+}
+.mini-stat-box { background: var(--surface-2); border: 1px solid var(--border); border-radius: 8px; padding: 6px 4px; }
+.mini-stat-val { font-size: 0.95rem; font-weight: 800; color: var(--lilac); line-height: 1.2; }
+.mini-stat-lbl { font-size: 0.68rem; color: var(--muted); }
+</style>
 """, unsafe_allow_html=True)
 
 # ----------------------------------------------------------------------------
