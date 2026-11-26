@@ -4,9 +4,10 @@ Aplikasi Streamlit: Regresi Linear, Klasifikasi, Clustering
 + Integrasi MongoDB (dataset tambahan, retraining, komentar publik, & model ML)
 + Integrasi Groq AI (Asisten AI, analisis metrik, & analisis sentimen komentar via groq_helper.py)
 + Integrasi Fuzzy Logic (Fuzzy KNN & Fuzzy C-Means) pada modul Klasifikasi
++ Galeri Hasil Training (referensi antar pengunjung)
 Sumber data: scikit-learn (Diabetes, California Housing, Iris, Wine, Breast Cancer)
 
-VERSI 3.4 - Tema Lilac + Galeri Hasil Training (referensi antar pengunjung)
+VERSI 3.5 - Tema Lilac Modern Terang + Galeri Hasil Training
 """
 import copy
 import hashlib
@@ -64,16 +65,19 @@ from fuzzy_helper import (
 # ----------------------------------------------------------------------------
 st.set_page_config(
     page_title="TAS AI - Hana Meisaria",
-    page_icon="👩‍🎓",
+    page_icon="🪻",
     layout="wide",
     initial_sidebar_state="expanded",
 )
 
 # ----------------------------------------------------------------------------
-# Session State untuk Navigasi
+# Session State untuk Navigasi & Status Model Terakhir
 # ----------------------------------------------------------------------------
 if "nav_radio" not in st.session_state:
-    st.session_state["nav_radio"] = "🏠 Dashboard Beranda"
+    st.session_state["nav_radio"] = "🏠 Dashboard"
+
+if "last_run" not in st.session_state:
+    st.session_state["last_run"] = None
 
 
 def change_page(page_name):
@@ -81,110 +85,394 @@ def change_page(page_name):
 
 
 # ----------------------------------------------------------------------------
-# Custom CSS - Tema Ungu Lilac + Modern Sidebar
+# Custom CSS & Template Plotly - Tema Lilac Terang Modern
 # ----------------------------------------------------------------------------
-LILAC_COLORS = ["#c4b5fd", "#e879f9", "#8b5cf6", "#f0abfc", "#a5b4fc", "#d8b4fe", "#7dd3fc", "#fda4af", "#86efac", "#fde68a"]
-LILAC_SCALE = [[0.0, "#1e1433"], [0.5, "#8b5cf6"], [1.0, "#f3e8ff"]]
-_lilac_tpl = copy.deepcopy(pio.templates["plotly_dark"])
+LILAC_COLORS = [
+    "#8b5cf6", "#a78bfa", "#c084fc", "#7c3aed", "#d8b4fe",
+    "#6366f1", "#a855f7", "#818cf8", "#9333ea", "#c4b5fd",
+]
+LILAC_SCALE = [[0.0, "#f8f5ff"], [0.5, "#a78bfa"], [1.0, "#5b21b6"]]
+_lilac_tpl = copy.deepcopy(pio.templates["plotly_white"])
 _lilac_tpl.layout.colorway = LILAC_COLORS
-_lilac_tpl.layout.font.color = "#e9d5ff"
-_lilac_tpl.layout.xaxis.gridcolor = "rgba(196,181,253,0.15)"
-_lilac_tpl.layout.yaxis.gridcolor = "rgba(196,181,253,0.15)"
-pio.templates["lilac"] = _lilac_tpl
+_lilac_tpl.layout.font.color = "#2e1065"
+_lilac_tpl.layout.xaxis.gridcolor = "rgba(139, 92, 246, 0.12)"
+_lilac_tpl.layout.yaxis.gridcolor = "rgba(139, 92, 246, 0.12)"
+pio.templates["lilac_light"] = _lilac_tpl
 
 st.markdown("""
 <style>
+@import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
 :root {
-    --bg-0: #120b20; --bg-1: #26163f; --surface: #1f1536; --surface-2: #2b1d49; --border: #3f2e66;
-    --txt: #f3e8ff; --muted: #b9a8dc; --dim: #8d7cb5;
-    --lilac: #c4b5fd; --lilac-2: #d8b4fe; --violet: #a78bfa; --violet-2: #8b5cf6; --fuchsia: #e879f9;
+    --bg-main: #fcfaff;
+    --bg-side: #f3effa;
+    --surface: #ffffff;
+    --surface-soft: #f9f6ff;
+    --border: #e6ddf7;
+    --txt: #2e1065;
+    --muted: #6d5c8c;
+    --accent: #8b5cf6;
+    --accent-dark: #5b21b6;
+    --accent-light: #a78bfa;
 }
-.stApp { background: linear-gradient(135deg, var(--bg-0) 0%, var(--bg-1) 50%, var(--bg-0) 100%); background-attachment: fixed; }
-[data-testid="stHeader"] { background: transparent; }
+
+html, body, [class*="css"] {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+}
+
+.stApp, [data-testid="stAppViewContainer"] {
+    background: var(--bg-main) !important;
+    color: var(--txt);
+}
+[data-testid="stHeader"] {
+    background: rgba(252, 250, 255, 0.88);
+}
+
 .gradient-text {
-    background: linear-gradient(90deg, #a78bfa, #e879f9);
-    -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800;
+    background: linear-gradient(90deg, #6d28d9, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    font-weight: 800;
 }
-.main-title-container { font-size: 2.5rem; font-weight: 800; margin-bottom: 0.2rem; }
-.custom-card {
-    background: linear-gradient(180deg, #241a3d, #1c1330);
-    border-radius: 14px; padding: 20px; border: 1px solid var(--border);
-    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25);
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
-    margin-bottom: 10px; height: 100%;
+.main-title-container {
+    font-size: 2.15rem;
+    font-weight: 800;
+    margin-bottom: 0.3rem;
+    color: #3b0764;
 }
-.custom-card:hover { transform: translateY(-2px); box-shadow: 0 10px 24px rgba(139, 92, 246, 0.28); border-color: var(--violet); }
-.card-title { color: #f5f3ff; font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
-.card-desc { color: var(--muted); font-size: 0.9rem; }
-[data-testid="stMetricValue"] { font-size: 1.8rem; font-weight: 700; color: var(--lilac); }
+
+/* === HERO BANNER BERANDA === */
+.hero-banner {
+    position: relative;
+    background: linear-gradient(115deg, #7c52c9 0%, #a779eb 52%, #8b5cf6 100%);
+    border-radius: 22px;
+    padding: 32px 36px;
+    color: #ffffff;
+    box-shadow: 0 10px 26px rgba(124, 82, 201, 0.24);
+    overflow: hidden;
+    margin-bottom: 24px;
+}
+.hero-title {
+    font-size: 2rem;
+    font-weight: 800;
+    margin: 0;
+    letter-spacing: 0.4px;
+    color: #ffffff;
+}
+.hero-subtitle {
+    font-size: 0.98rem;
+    color: #f3e8ff;
+    margin-top: 6px;
+    margin-bottom: 20px;
+}
+.pill-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+}
+.pill-badge {
+    background: #ffffff;
+    color: #4c1d95;
+    padding: 6px 14px;
+    border-radius: 999px;
+    font-size: 0.82rem;
+    font-weight: 600;
+    box-shadow: 0 2px 6px rgba(46, 16, 101, 0.1);
+}
+.deco-1 { position: absolute; right: 22%; top: 20%; font-size: 1.35rem; opacity: 0.78; }
+.deco-2 { position: absolute; right: 6%; top: 14%; font-size: 2.2rem; opacity: 0.88; }
+.deco-3 { position: absolute; right: 14%; bottom: 16%; font-size: 1.6rem; opacity: 0.82; }
+
+.section-heading {
+    font-size: 1.15rem;
+    font-weight: 800;
+    color: #3b0764;
+    margin: 6px 0 14px 0;
+}
+
+/* === GRID FITUR APLIKASI (4 KOLOM RAPI = 2 BARIS) === */
+.feature-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 14px;
+    margin-bottom: 18px;
+}
+@media (max-width: 1100px) {
+    .feature-grid { grid-template-columns: repeat(2, 1fr); }
+}
+.feature-card {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 16px;
+    transition: transform 0.16s ease, box-shadow 0.16s ease, border-color 0.16s ease;
+}
+.feature-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(139, 92, 246, 0.14);
+    border-color: var(--accent);
+}
+.feature-icon { font-size: 1.5rem; margin-bottom: 8px; }
+.feature-title { font-weight: 700; font-size: 0.92rem; color: var(--txt); margin-bottom: 4px; }
+.feature-desc { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+
+/* === KARTU RINGKASAN BAWAH === */
+.bottom-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-top: 4px solid var(--accent);
+    border-radius: 18px;
+    padding: 20px;
+    min-height: 185px;
+    box-shadow: 0 4px 14px rgba(109, 40, 217, 0.06);
+}
+.bottom-card-title { font-size: 1.02rem; font-weight: 800; color: #4c1d95; margin-bottom: 14px; }
+.metric-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.metric-box {
+    background: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    border-radius: 12px;
+    padding: 14px;
+}
+.metric-label { font-size: 0.84rem; color: var(--muted); font-weight: 600; }
+.metric-value { font-size: 1.9rem; font-weight: 800; color: var(--txt); margin-top: 4px; }
+.status-info-box {
+    background: #f0f4ff;
+    color: #3730a3;
+    border-radius: 12px;
+    padding: 15px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.status-ok-box {
+    background: #f5f0ff;
+    color: #4c1d95;
+    border: 1px solid #ddd6fe;
+    border-radius: 12px;
+    padding: 15px;
+    font-size: 0.9rem;
+    line-height: 1.5;
+}
+.score-center { text-align: center; padding: 4px 0; }
+.score-label { font-weight: 700; font-size: 0.88rem; color: #4c1d95; margin-bottom: 10px; }
+.score-ring {
+    width: 92px;
+    height: 92px;
+    border-radius: 50%;
+    border: 8px solid #ede9fe;
+    border-top-color: var(--accent);
+    margin: 0 auto;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--accent-dark);
+    font-size: 1rem;
+    font-weight: 800;
+    background: var(--bg-main);
+}
+
+/* === KOMPONEN STREAMLIT === */
 [data-testid="stMetric"] {
-    background-color: var(--surface); border: 1px solid var(--border); border-left: 4px solid var(--violet);
-    padding: 12px 16px; border-radius: 10px;
+    background-color: var(--surface-soft);
+    border: 1px solid var(--border);
+    border-left: 4px solid var(--accent);
+    padding: 12px 16px;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(109, 40, 217, 0.04);
 }
+[data-testid="stMetricLabel"] { color: var(--muted) !important; font-weight: 600; }
+[data-testid="stMetricValue"] { font-size: 1.75rem; font-weight: 800; color: var(--txt) !important; }
+
 .stTabs [data-baseweb="tab-list"] { gap: 8px; }
-.stTabs [data-baseweb="tab"] { border-radius: 999px; padding: 8px 18px; background-color: var(--surface-2); }
-.stTabs [aria-selected="true"] { background: linear-gradient(90deg, #7c3aed, #a855f7) !important; color: white !important; }
+.stTabs [data-baseweb="tab"] {
+    border-radius: 999px;
+    padding: 8px 18px;
+    background-color: var(--bg-side);
+    color: #4c1d95;
+    font-weight: 600;
+}
+.stTabs [aria-selected="true"] {
+    background: linear-gradient(90deg, #7c3aed, #a78bfa) !important;
+    color: #ffffff !important;
+}
 .stTabs [data-baseweb="tab-highlight"], .stTabs [data-baseweb="tab-border"] { display: none; }
-[data-testid="stExpander"] { border: 1px solid var(--border); border-radius: 12px; background: rgba(31, 21, 54, 0.55); }
-[data-testid="stExpander"] summary { color: var(--lilac-2); font-weight: 600; }
-[data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+
+[data-testid="stExpander"] {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    background: var(--surface);
+}
+[data-testid="stExpander"] summary { color: #4c1d95; font-weight: 700; }
+[data-testid="stDataFrame"] { border: 1px solid var(--border); border-radius: 12px; overflow: hidden; }
 [data-testid="stAlert"] { border-radius: 12px; }
-[data-testid="stAlert"]:has([data-testid="stAlertContentInfo"]) { background: rgba(167, 139, 250, 0.12); border: 1px solid rgba(167, 139, 250, 0.35); }
+
 .stButton > button[kind="primary"], .stButton > button[data-testid="stBaseButton-primary"] {
-    background: linear-gradient(90deg, #7c3aed, #c084fc); border: none; color: #fff; font-weight: 600;
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    border: none;
+    color: #ffffff;
+    border-radius: 10px;
+    font-weight: 600;
+    box-shadow: 0 4px 10px rgba(124, 58, 237, 0.24);
 }
-.stButton > button[kind="secondary"]:hover, .stButton > button[data-testid="stBaseButton-secondary"]:hover { border-color: var(--violet); color: var(--lilac); }
+.stButton > button[kind="primary"]:hover, .stButton > button[data-testid="stBaseButton-primary"]:hover {
+    background: linear-gradient(90deg, #6d28d9, #9333ea);
+}
+.stButton > button[kind="secondary"], .stButton > button[data-testid="stBaseButton-secondary"] {
+    background-color: var(--surface-soft);
+    border: 1px solid #ddd6fe;
+    color: #4c1d95;
+    border-radius: 10px;
+    font-weight: 600;
+}
+.stButton > button[kind="secondary"]:hover, .stButton > button[data-testid="stBaseButton-secondary"]:hover {
+    background-color: var(--bg-side);
+    border-color: var(--accent);
+    color: var(--accent-dark);
+}
 hr { border-color: var(--border) !important; }
+
 .footer {
-    text-align: center; color: var(--dim); font-size: 0.85rem;
-    padding: 20px 0 10px 0; border-top: 1px solid var(--border); margin-top: 40px;
+    text-align: center;
+    color: #7c6f96;
+    font-size: 0.85rem;
+    padding: 20px 0 10px 0;
+    border-top: 1px solid var(--border);
+    margin-top: 36px;
 }
+
+/* Galeri Highlight Card */
 .gal-best {
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.35), rgba(232, 121, 249, 0.18));
-    border: 1px solid rgba(196, 181, 253, 0.45); border-radius: 14px; padding: 16px 18px; margin: 6px 0 14px 0;
+    background: linear-gradient(135deg, #f5f0ff, #ede4ff);
+    border: 1px solid #d4c2fa;
+    border-left: 5px solid var(--accent);
+    border-radius: 14px;
+    padding: 16px 18px;
+    margin: 6px 0 14px 0;
 }
-.gal-best-title { font-weight: 800; color: #f5f3ff; font-size: 1.05rem; }
+.gal-best-title { font-weight: 800; color: #4c1d95; font-size: 1.05rem; }
 .gal-best-sub { color: var(--muted); font-size: 0.88rem; margin-top: 4px; }
 
-/* === MODERN SIDEBAR === */
-[data-testid="stSidebar"] { background: linear-gradient(180deg, #160d27 0%, #1b1031 100%); border-right: 1px solid var(--border); }
-[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.38rem; }
-.sidebar-brand {
-    background: linear-gradient(135deg, rgba(124, 58, 237, 0.30), rgba(232, 121, 249, 0.16));
-    border: 1px solid rgba(167, 139, 250, 0.40); border-radius: 14px; padding: 14px 16px; margin-bottom: 10px;
+/* === SIDEBAR TEMA LILAC === */
+[data-testid="stSidebar"] {
+    background-color: var(--bg-side) !important;
+    border-right: 1px solid #e4dbf5;
 }
-.sidebar-brand-title { font-size: 1.05rem; font-weight: 800; color: #faf5ff; margin: 0; }
-.sidebar-brand-sub { font-size: 0.78rem; color: var(--muted); margin-top: 3px; }
+[data-testid="stSidebar"] [data-testid="stVerticalBlock"] { gap: 0.35rem; }
+.sidebar-title {
+    font-size: 1.6rem;
+    font-weight: 800;
+    color: var(--accent-dark);
+    margin-bottom: 10px;
+    letter-spacing: -0.5px;
+}
+.profile-card {
+    background: #ffffff;
+    border-radius: 16px;
+    padding: 13px 15px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 2px 10px rgba(109, 40, 217, 0.07);
+    border: 1px solid var(--border);
+    margin-bottom: 14px;
+}
+.profile-avatar {
+    width: 44px;
+    height: 44px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #7c3aed, #c084fc);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.3rem;
+    color: #ffffff;
+    flex-shrink: 0;
+}
+.profile-name { font-weight: 700; font-size: 0.94rem; color: var(--txt); line-height: 1.25; }
+.profile-id { font-size: 0.78rem; color: var(--muted); }
+
 .sidebar-section {
-    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--dim); margin: 12px 0 4px 4px;
+    font-size: 0.7rem;
+    font-weight: 800;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #8470ad;
+    margin: 10px 0 4px 4px;
 }
 [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"],
 [data-testid="stSidebar"] button[data-testid="baseButton-secondary"],
 [data-testid="stSidebar"] button[kind="secondary"] {
-    background-color: transparent; border: 1px solid transparent; color: #d9ccf5;
-    justify-content: flex-start; padding: 0.42rem 0.75rem; border-radius: 10px; font-weight: 500; transition: all 0.18s ease;
+    background-color: transparent;
+    border: 1px solid transparent;
+    color: #3b0764;
+    justify-content: flex-start;
+    padding: 0.44rem 0.8rem;
+    border-radius: 12px;
+    font-weight: 500;
+    transition: all 0.18s ease;
 }
 [data-testid="stSidebar"] button[data-testid="stBaseButton-secondary"]:hover,
 [data-testid="stSidebar"] button[data-testid="baseButton-secondary"]:hover,
 [data-testid="stSidebar"] button[kind="secondary"]:hover {
-    background-color: var(--surface-2); border-color: var(--border); color: #ffffff; transform: translateX(3px);
+    background-color: #e9e0fb;
+    border-color: #d8c8f8;
+    color: var(--accent-dark);
+    transform: translateX(2px);
 }
 [data-testid="stSidebar"] button[data-testid="stBaseButton-primary"],
 [data-testid="stSidebar"] button[data-testid="baseButton-primary"],
 [data-testid="stSidebar"] button[kind="primary"] {
-    background: linear-gradient(90deg, #7c3aed, #c084fc); border: none; color: #ffffff;
-    justify-content: flex-start; padding: 0.42rem 0.75rem; border-radius: 10px; font-weight: 600;
-    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.40);
+    background: linear-gradient(90deg, #7c3aed, #a78bfa);
+    border: none;
+    color: #ffffff;
+    justify-content: flex-start;
+    padding: 0.44rem 0.8rem;
+    border-radius: 12px;
+    font-weight: 700;
+    box-shadow: 0 4px 12px rgba(124, 58, 237, 0.28);
 }
-.status-panel { background-color: #150c26; border: 1px solid var(--surface-2); border-radius: 12px; padding: 12px 14px; margin-top: 14px; }
-.status-row { display: flex; justify-content: space-between; align-items: center; font-size: 0.82rem; color: #d9ccf5; padding: 4px 0; }
-.badge-ok { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.35); padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-.badge-warn { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.35); padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-.badge-err { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.35); padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 600; }
-.mini-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--surface-2); text-align: center; }
-.mini-stat-box { background: var(--surface-2); border-radius: 8px; padding: 6px 4px; }
-.mini-stat-val { font-size: 0.95rem; font-weight: 700; color: var(--lilac); line-height: 1.2; }
+
+.mini-card {
+    background: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 10px 12px;
+    margin-bottom: 8px;
+}
+.mini-card-title { font-weight: 700; font-size: 0.84rem; color: #4c1d95; }
+.mini-card-desc { font-size: 0.74rem; color: var(--muted); margin-top: 2px; line-height: 1.35; }
+
+.status-panel {
+    background-color: #ffffff;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    margin-top: 10px;
+}
+.status-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.82rem;
+    color: #3b0764;
+    font-weight: 600;
+    padding: 4px 0;
+}
+.badge-ok { background: #ecfdf5; color: #059669; border: 1px solid #a7f3d0; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge-warn { background: #fffbeb; color: #d97706; border: 1px solid #fde68a; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.badge-err { background: #fef2f2; color: #dc2626; border: 1px solid #fecaca; padding: 2px 8px; border-radius: 999px; font-size: 0.72rem; font-weight: 700; }
+.mini-stats {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+    margin-top: 10px;
+    padding-top: 10px;
+    border-top: 1px solid #ede9fe;
+    text-align: center;
+}
+.mini-stat-box { background: var(--surface-soft); border: 1px solid var(--border); border-radius: 9px; padding: 6px 4px; }
+.mini-stat-val { font-size: 0.95rem; font-weight: 800; color: var(--accent); line-height: 1.2; }
 .mini-stat-lbl { font-size: 0.68rem; color: var(--muted); }
 </style>
 """, unsafe_allow_html=True)
@@ -1023,75 +1311,159 @@ def select_data(task, key_prefix):
 
 
 # ============================================================================
-# HALAMAN: DASHBOARD BERANDA
+# HALAMAN: DASHBOARD BERANDA (TEMA LILAC TERANG)
 # ============================================================================
 def page_home():
-    st.markdown('<h1 class="main-title-container">🧠🤖 <span class="gradient-text">Dashboard Machine Learning</span></h1>', unsafe_allow_html=True)
-    st.markdown(
-        "Media pembelajaran & eksperimen interaktif **Regresi Linear**, **Klasifikasi** (termasuk **Fuzzy Logic**), "
-        "dan **Clustering** terintegrasi *real-time* dengan **MongoDB Atlas** & **Groq AI**.<br>"
-        "**TAS AI : Hana Meisaria 632025057**",
-        unsafe_allow_html=True,
-    )
-    st.write("")
+    last = st.session_state.get("last_run")
 
-    c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("""
-            <div class="custom-card">
-                <div class="card-title">📈 Regresi Linear</div>
-                <div class="card-desc"><b>Supervised Learning</b> untuk memprediksi angka kontinu pada dataset <b>Diabetes</b> & <b>California Housing</b>.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("🚀 Modul Regresi", key="btn_nav_reg", use_container_width=True, on_click=change_page, args=("📈 Regresi Linear",))
-    with c2:
-        st.markdown("""
-            <div class="custom-card">
-                <div class="card-title">🧪 Klasifikasi + Fuzzy</div>
-                <div class="card-desc"><b>Supervised Learning</b> untuk memprediksi kelas diskrit pada <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>, kini dilengkapi <b>Fuzzy KNN</b> & <b>Fuzzy C-Means</b> untuk analisis derajat keanggotaan.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("🚀 Modul Klasifikasi", key="btn_nav_clf", use_container_width=True, on_click=change_page, args=("🧪 Klasifikasi",))
-    with c3:
-        st.markdown("""
-            <div class="custom-card">
-                <div class="card-title">🔵 Clustering K-Means</div>
-                <div class="card-desc"><b>Unsupervised Learning</b> untuk mengelompokkan data tanpa label pada dataset <b>Iris</b>, <b>Wine</b>, & <b>Breast Cancer</b>.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("🚀 Modul Clustering", key="btn_nav_clu", use_container_width=True, on_click=change_page, args=("🔵 Clustering",))
+    if last:
+        b_task = last["task_label"]
+        b_ds = last["dataset"]
+        b_algo = last["model_name"]
+        n_samples = last["n_samples"]
+        n_feats = last["n_feats"]
+    else:
+        df_default, feats_default, _ = load_base("Diabetes")
+        b_task = "Regresi"
+        b_ds = "Diabetes"
+        b_algo = "Linear Regression"
+        n_samples = len(df_default)
+        n_feats = len(feats_default)
 
-    st.write("")
-    a1, a2 = st.columns(2)
-    with a1:
-        st.markdown("""
-            <div class="custom-card">
-                <div class="card-title">🤖 Asisten AI (Groq)</div>
-                <div class="card-desc">Tutor interaktif dengan tombol pertanyaan cepat untuk belajar konsep ML, arti rumus matematika, fuzzy logic, dan interpretasi metrik evaluasi.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("💬 Buka Asisten AI (Groq)", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
-    with a2:
-        st.markdown("""
-            <div class="custom-card">
-                <div class="card-title">📝 Mini Kuis Machine Learning</div>
-                <div class="card-desc">Uji pemahaman Regresi, Klasifikasi, Clustering, Fuzzy Logic, dan evaluasi model dengan pembahasan otomatis serta generator soal baru dari Groq AI.</div>
-            </div>
-        """, unsafe_allow_html=True)
-        st.button("🎯 Mulai Mini Kuis ML", key="btn_nav_kuis", use_container_width=True, on_click=change_page, args=("📝 Mini Kuis ML",))
-
-    st.write("")
-    st.markdown("""
-        <div class="custom-card">
-            <div class="card-title">🏆 Galeri Hasil Training</div>
-            <div class="card-desc">Lihat hasil training yang disimpan pengunjung lain: leaderboard, perbandingan algoritma, dan konfigurasi parameter yang bisa dijadikan referensi untuk training modelmu sendiri.</div>
+    # 1. Hero Banner Lilac
+    st.markdown(f"""
+    <div class="hero-banner">
+        <div class="deco-1">💜</div>
+        <div class="deco-2">🪻</div>
+        <div class="deco-3">✨</div>
+        <div class="hero-title">HALO, SELAMAT DATANG! 👋</div>
+        <div class="hero-subtitle">Regresi, Klasifikasi, Fuzzy Logic, dan Clustering secara interaktif ✨ · TAS AI — Hana Meisaria (632025057)</div>
+        <div class="pill-row">
+            <span class="pill-badge">🎯 {b_task}</span>
+            <span class="pill-badge">📊 {b_ds}</span>
+            <span class="pill-badge">🧩 {b_algo}</span>
+            <span class="pill-badge">🎲 Seed 42</span>
         </div>
+    </div>
     """, unsafe_allow_html=True)
-    st.button("🏆 Buka Galeri Hasil Training", key="btn_nav_galeri", use_container_width=True, on_click=change_page, args=("🏆 Galeri Hasil Training",))
+
+    # 2. Grid Fitur Aplikasi (8 kartu rapi dalam 2 baris x 4 kolom)
+    st.markdown('<div class="section-heading">✨ Fitur Aplikasi</div>', unsafe_allow_html=True)
+    st.markdown("""
+    <div class="feature-grid">
+        <div class="feature-card">
+            <div class="feature-icon">📈</div>
+            <div class="feature-title">Regresi Linear</div>
+            <div class="feature-desc">Prediksi angka kontinu pada Diabetes & California Housing</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🧩</div>
+            <div class="feature-title">Klasifikasi</div>
+            <div class="feature-desc">Random Forest, Logistic, KNN, & Decision Tree</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🌫️</div>
+            <div class="feature-title">Fuzzy Logic</div>
+            <div class="feature-desc">Fuzzy KNN & Fuzzy C-Means + derajat keanggotaan</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🔵</div>
+            <div class="feature-title">Clustering</div>
+            <div class="feature-desc">K-Means + proyeksi PCA 2D, Elbow & Silhouette</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🏆</div>
+            <div class="feature-title">Galeri Training</div>
+            <div class="feature-desc">Leaderboard & referensi parameter antar pengunjung</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">🗄️</div>
+            <div class="feature-title">MongoDB & Retrain</div>
+            <div class="feature-desc">Tambah/hapus data, upload CSV, & retrain model</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">💬</div>
+            <div class="feature-title">Komentar + Groq AI</div>
+            <div class="feature-desc">Komentar publik, ringkasan & analisis sentimen LLM</div>
+        </div>
+        <div class="feature-card">
+            <div class="feature-icon">📝</div>
+            <div class="feature-title">Tutor & Mini Kuis</div>
+            <div class="feature-desc">Asisten belajar AI & kuis interaktif evaluasi ML</div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # Tombol Pintas Modul
+    q1, q2, q3, q4, q5, q6 = st.columns(6)
+    q1.button("📈 Regresi", key="btn_nav_reg", use_container_width=True, on_click=change_page, args=("📈 Regresi Linear",))
+    q2.button("🧪 Klasifikasi", key="btn_nav_clf", use_container_width=True, on_click=change_page, args=("🧪 Klasifikasi",))
+    q3.button("🔵 Clustering", key="btn_nav_clu", use_container_width=True, on_click=change_page, args=("🔵 Clustering",))
+    q4.button("🏆 Galeri", key="btn_nav_galeri", use_container_width=True, on_click=change_page, args=("🏆 Galeri Hasil Training",))
+    q5.button("🤖 Asisten AI", key="btn_nav_ai", use_container_width=True, on_click=change_page, args=("🤖 Asisten AI (Groq)",))
+    q6.button("📝 Mini Kuis", key="btn_nav_kuis", use_container_width=True, on_click=change_page, args=("📝 Mini Kuis ML",))
+
+    st.write("")
+
+    # 3. Baris Bawah 3 Kartu: Ringkasan Dataset, Status Model, Skor Model
+    col1, col2, col3 = st.columns([1.2, 1.25, 0.95], gap="medium")
+
+    with col1:
+        st.markdown(f"""
+        <div class="bottom-card">
+            <div class="bottom-card-title">📊 Ringkasan Dataset ({b_ds})</div>
+            <div class="metric-row">
+                <div class="metric-box">
+                    <div class="metric-label">📏 Sampel</div>
+                    <div class="metric-value">{n_samples}</div>
+                </div>
+                <div class="metric-box">
+                    <div class="metric-label">🎛️ Fitur</div>
+                    <div class="metric-value">{n_feats}</div>
+                </div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col2:
+        if last:
+            status_html = (
+                f'<div class="status-ok-box">'
+                f'Model aktif: <b>{last["model_name"]}</b> ({last["task_label"]})<br>'
+                f'Dataset: <b>{last["dataset"]}</b> · Metrik utama: <b>{last["score_label"]} = {last["score_val"]:.4f}</b>'
+                f'</div>'
+            )
+        else:
+            status_html = (
+                '<div class="status-info-box">'
+                'Belum ada model dilatih di sesi ini. Pilih modul <b>Regresi, Klasifikasi,</b> atau <b>Clustering</b> di sidebar.'
+                '</div>'
+            )
+        st.markdown(f"""
+        <div class="bottom-card">
+            <div class="bottom-card-title">🧠 Status Model</div>
+            {status_html}
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col3:
+        score_lbl = last["score_label"] if last else "Skor Utama"
+        score_txt = f'{last["score_val"]:.3f}' if last else "--"
+        st.markdown(f"""
+        <div class="bottom-card">
+            <div class="bottom-card-title" style="text-align:center;">🎯 Skor Model</div>
+            <div class="score-center">
+                <div class="score-label">{score_lbl}</div>
+                <div class="score-ring">{score_txt}</div>
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
     st.write("---")
-    st.subheader("📚 Peta Konsep Machine Learning")
-    with st.expander("📖 Pelajari Perbedaan Supervised vs Unsupervised Learning & Alur Kerja ML", expanded=True):
+
+    # 4. Peta Konsep Machine Learning
+    st.markdown('<div class="section-heading">📚 Peta Konsep Machine Learning</div>', unsafe_allow_html=True)
+    with st.expander("📖 Pelajari Perbedaan Supervised vs Unsupervised Learning & Alur Kerja ML", expanded=False):
         konsep_df = pd.DataFrame([
             {
                 "Metode": "Regresi Linear",
@@ -1101,7 +1473,7 @@ def page_home():
                 "Pertanyaan yang Dijawab": "Berapa nilai yang diprediksi?",
             },
             {
-                "Metode": "Klasifikasi (crisp)",
+                "Metode": "Klasifikasi (Crisp)",
                 "Paradigma": "Supervised Learning (Ada Label Target)",
                 "Bentuk Output": "Kategori / Kelas diskrit (mis. jinak vs ganas)",
                 "Metrik Evaluasi": "Accuracy, Precision, Recall, F1 Score",
@@ -1129,27 +1501,27 @@ def page_home():
         p2.info("**2️⃣ Pemodelan & Evaluasi**\n\nModel dilatih lalu diukur kinerjanya lewat metrik (arahkan kursor ke `?` di tiap metrik) dan grafik interaktif.")
         p3.info("**3️⃣ Simulasi & Retraining**\n\nUji prediksi dengan nilai fitur baru, lalu tambahkan data ke MongoDB untuk melihat dampak *retraining*.")
 
-    st.write("---")
-    st.subheader("⚡ Status Server & Database")
-    if db is None:
-        st.error(f"MongoDB belum terhubung: {db_error}")
-    else:
-        st.success("🟢 MongoDB Atlas terhubung aktif.")
-        rows = []
-        for task, names in TASK_DATASETS.items():
-            for n in names:
-                rows.append({
-                    "Modul": TASK_LABEL[task],
-                    "Dataset": n,
-                    "Deskripsi": DATASET_DESC.get(n, "-"),
-                    "Data Tambahan": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
-                    "Model Tersimpan": db.models.count_documents({"key": f"{task}:{n}"}),
-                    "Hasil di Galeri": db.hasil_training.count_documents({"task": task, "dataset": n}),
-                })
-        st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
-        st.caption(f"💬 Total Komentar Publik: **{db.komentar.count_documents({})}** | 📦 Total Model: **{db.models.count_documents({})}**")
+    # 5. Status Server & Database
+    with st.expander("⚡ Status Server & Ringkasan Database MongoDB", expanded=False):
+        if db is None:
+            st.error(f"MongoDB belum terhubung: {db_error}")
+        else:
+            st.success("🟢 MongoDB Atlas terhubung aktif.")
+            rows = []
+            for task, names in TASK_DATASETS.items():
+                for n in names:
+                    rows.append({
+                        "Modul": TASK_LABEL[task],
+                        "Dataset": n,
+                        "Deskripsi": DATASET_DESC.get(n, "-"),
+                        "Data Tambahan": db.dataset_tambahan.count_documents({"key": f"{task}:{n}"}),
+                        "Model Tersimpan": db.models.count_documents({"key": f"{task}:{n}"}),
+                        "Hasil di Galeri": db.hasil_training.count_documents({"task": task, "dataset": n}),
+                    })
+            st.dataframe(pd.DataFrame(rows), use_container_width=True, hide_index=True)
+            st.caption(f"💬 Total Komentar Publik: **{db.komentar.count_documents({})}** | 📦 Total Model: **{db.models.count_documents({})}**")
 
-    st.markdown('<div class="footer">© 2026 Hana Meisaria · TAS AI · Universitas Kristen Satya Wacana</div>', unsafe_allow_html=True)
+    st.markdown('<div class="footer">© 2026 Hana Meisaria (632025057) · TAS AI · Universitas Kristen Satya Wacana</div>', unsafe_allow_html=True)
 
 
 # ============================================================================
@@ -1180,8 +1552,8 @@ def page_regresi():
             st.caption("Sensitif terhadap kesalahan besar (*outlier*).")
         st.markdown(
             "**3. Cara Membaca Grafik *Aktual vs Prediksi*:**\n"
-            "- Garis merah putus-putus adalah **garis ideal** (Nilai Aktual = Nilai Prediksi).\n"
-            "- Semakin rapat titik biru menempel pada garis merah, semakin kecil kesalahan prediksi model."
+            "- Garis putus-putus adalah **garis ideal** (Nilai Aktual = Nilai Prediksi).\n"
+            "- Semakin rapat titik menempel pada garis ideal, semakin kecil kesalahan prediksi model."
         )
 
     name, df, n_extra, feats, tn = select_data("regresi", "reg")
@@ -1196,6 +1568,17 @@ def page_regresi():
 
     with st.spinner("Melatih model regresi..."):
         res = run_model("regresi", df, test_size=test_size)
+
+    st.session_state["last_run"] = {
+        "task_label": "Regresi",
+        "dataset": name,
+        "model_name": "Linear Regression",
+        "n_samples": len(df),
+        "n_feats": len(feats),
+        "score_label": "R² Score",
+        "score_val": res["metrics"]["R² Score"],
+    }
+
     st.caption(f"🧪 Pembagian Data: **{res['n_train']}** baris Data Latih · **{res['n_test']}** baris Data Uji")
     show_metrics(res["metrics"])
     show_quick_interpretation("regresi", res["metrics"])
@@ -1224,21 +1607,21 @@ def page_regresi():
         fig = go.Figure()
         fig.add_trace(go.Scatter(
             x=res["y_test"], y=res["pred"], mode="markers",
-            marker=dict(size=8, color="#c4b5fd", opacity=0.75, line=dict(width=0)),
+            marker=dict(size=8, color="#8b5cf6", opacity=0.75, line=dict(width=0.5, color="#ffffff")),
             name="Data Uji",
             hovertemplate="Aktual: %{x:.2f}<br>Prediksi: %{y:.2f}<extra></extra>",
         ))
         lims = [min(res["y_test"].min(), res["pred"].min()), max(res["y_test"].max(), res["pred"].max())]
         fig.add_trace(go.Scatter(
             x=lims, y=lims, mode="lines",
-            line=dict(color="#f0abfc", dash="dash", width=2),
+            line=dict(color="#4c1d95", dash="dash", width=2),
             name="Garis Ideal",
         ))
         fig.update_layout(
             title=f"Aktual vs Prediksi — {name}",
             xaxis_title="Nilai Aktual", yaxis_title="Nilai Prediksi",
-            template="lilac", height=400,
-            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+            template="lilac_light", height=400,
+            paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.85)",
         )
         c1.plotly_chart(fig, use_container_width=True)
 
@@ -1352,7 +1735,6 @@ def page_klasifikasi():
     }
     st.caption(algo_desc[model_name])
 
-    # Slider parameter fuzzy (hanya untuk model fuzzy)
     fuzzy_k, fuzzy_m = 5, 2.0
     if model_name in ("Fuzzy KNN", "Fuzzy C-Means"):
         f1, f2 = st.columns(2)
@@ -1382,6 +1764,17 @@ def page_klasifikasi():
             fuzzy_k=fuzzy_k,
             fuzzy_m=fuzzy_m,
         )
+
+    st.session_state["last_run"] = {
+        "task_label": "Klasifikasi",
+        "dataset": name,
+        "model_name": model_name,
+        "n_samples": len(df),
+        "n_feats": len(feats),
+        "score_label": "F1 Score",
+        "score_val": res["metrics"]["F1 Score"],
+    }
+
     st.caption(f"🧪 Pembagian Data (Stratified): **{res['n_train']}** baris Data Latih · **{res['n_test']}** baris Data Uji")
     show_metrics(res["metrics"])
     show_quick_interpretation("klasifikasi", res["metrics"])
@@ -1412,7 +1805,7 @@ def page_klasifikasi():
         vc = show["kelas"].value_counts().reset_index()
         vc.columns = ["Kelas", "Jumlah"]
         fig = px.bar(vc, x="Kelas", y="Jumlah", color="Kelas", title=f"Distribusi Kelas — {name}")
-        fig.update_layout(template="lilac", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)")
+        fig.update_layout(template="lilac_light", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(255,255,255,0.85)")
         st.plotly_chart(fig, use_container_width=True)
 
     with t2:
@@ -1425,13 +1818,13 @@ def page_klasifikasi():
         )
         fig.update_layout(
             title=f"Confusion Matrix — {model_name} ({name})",
-            template="lilac",
+            template="lilac_light",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(255,255,255,0.85)",
             height=450,
         )
         st.plotly_chart(fig, use_container_width=True)
-        st.caption("💡 Semakin terang angka di garis diagonal (kiri-atas ke kanan-bawah), semakin tinggi ketepatan klasifikasi model.")
+        st.caption("💡 Semakin pekat warna di garis diagonal (kiri-atas ke kanan-bawah), semakin tinggi ketepatan klasifikasi model.")
 
     with t3:
         base = load_base(name)[0]
@@ -1455,15 +1848,14 @@ def page_klasifikasi():
                     title="Tingkat Keyakinan (Probabilitas) per Kelas",
                 )
                 fig.update_layout(
-                    template="lilac",
+                    template="lilac_light",
                     paper_bgcolor="rgba(0,0,0,0)",
-                    plot_bgcolor="rgba(0,0,0,0)",
+                    plot_bgcolor="rgba(255,255,255,0.85)",
                     height=300,
                     showlegend=False,
                 )
                 st.plotly_chart(fig, use_container_width=True)
 
-                # --- Visualisasi derajat keanggotaan fuzzy (khusus model fuzzy) ---
                 if model_name in ("Fuzzy KNN", "Fuzzy C-Means"):
                     st.markdown("##### 🌫️ Derajat Keanggotaan Fuzzy (Membership)")
                     st.caption(
@@ -1472,6 +1864,11 @@ def page_klasifikasi():
                         "berdasarkan rumus fuzzy (bukan sigmoid/voting crisp)."
                     )
                     fig_mem = plot_membership(proba, idx_labels)
+                    fig_mem.update_layout(
+                        template="lilac_light",
+                        paper_bgcolor="rgba(0,0,0,0)",
+                        plot_bgcolor="rgba(255,255,255,0.85)",
+                    )
                     st.plotly_chart(fig_mem, use_container_width=True)
                     yakin = float(np.max(proba))
                     if yakin >= 0.8:
@@ -1526,6 +1923,17 @@ def page_clustering():
 
     with st.spinner("Menjalankan K-Means..."):
         res = run_model("clustering", df, k=k)
+
+    st.session_state["last_run"] = {
+        "task_label": "Clustering",
+        "dataset": name,
+        "model_name": f"K-Means (k={k})",
+        "n_samples": len(df),
+        "n_feats": len(feats),
+        "score_label": "Silhouette",
+        "score_val": res["metrics"]["Silhouette"],
+    }
+
     show_metrics(res["metrics"])
     show_quick_interpretation("clustering", res["metrics"])
     st.write("")
@@ -1551,13 +1959,13 @@ def page_clustering():
             pca_df, x="PC1", y="PC2", color="Cluster",
             title=f"Proyeksi PCA 2D — K-Means (k={k}, {name})",
             color_discrete_sequence=LILAC_COLORS,
-            opacity=0.8,
+            opacity=0.85,
         )
-        fig.update_traces(marker=dict(size=9, line=dict(width=0.5, color="white")))
+        fig.update_traces(marker=dict(size=9, line=dict(width=0.7, color="#ffffff")))
         fig.update_layout(
-            template="lilac",
+            template="lilac_light",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(255,255,255,0.85)",
             height=450,
         )
         c1.plotly_chart(fig, use_container_width=True)
@@ -1565,20 +1973,22 @@ def page_clustering():
         c2.write("**Evaluasi Jumlah Cluster (Elbow & Silhouette):**")
         ed = elbow_data(df).reset_index()
         fig1 = px.line(ed, x="k", y="Inertia", markers=True, title="Elbow Method (Inertia — cari titik siku)")
+        fig1.update_traces(line_color="#8b5cf6")
         fig1.update_layout(
-            template="lilac",
+            template="lilac_light",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=200,
+            plot_bgcolor="rgba(255,255,255,0.85)",
+            height=205,
             margin=dict(t=40, b=10),
         )
         c2.plotly_chart(fig1, use_container_width=True)
         fig2 = px.line(ed, x="k", y="Silhouette", markers=True, title="Silhouette Score (cari titik puncak)")
+        fig2.update_traces(line_color="#6d28d9")
         fig2.update_layout(
-            template="lilac",
+            template="lilac_light",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
-            height=200,
+            plot_bgcolor="rgba(255,255,255,0.85)",
+            height=205,
             margin=dict(t=40, b=10),
         )
         c2.plotly_chart(fig2, use_container_width=True)
@@ -1589,11 +1999,15 @@ def page_clustering():
         c1, c2 = st.columns(2)
         vc = X["cluster"].value_counts().sort_index().reset_index()
         vc.columns = ["Cluster", "Jumlah"]
-        fig = px.bar(vc, x="Cluster", y="Jumlah", color="Cluster", title="Jumlah Anggota per Cluster")
+        fig = px.bar(
+            vc, x="Cluster", y="Jumlah", color="Cluster",
+            title="Jumlah Anggota per Cluster",
+            color_continuous_scale=LILAC_SCALE,
+        )
         fig.update_layout(
-            template="lilac",
+            template="lilac_light",
             paper_bgcolor="rgba(0,0,0,0)",
-            plot_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(255,255,255,0.85)",
             showlegend=False,
         )
         c1.plotly_chart(fig, use_container_width=True)
@@ -1616,7 +2030,7 @@ def page_clustering():
 # HALAMAN: RETRAINING
 # ============================================================================
 def page_retrain():
-    st.markdown('<h1 class="main-title-container">🔁 <span class="gradient-text">Management Data & Retraining</span></h1>', unsafe_allow_html=True)
+    st.markdown('<h1 class="main-title-container">🗄️ <span class="gradient-text">Database & Retraining</span></h1>', unsafe_allow_html=True)
     with st.expander("📖 Mengapa Retraining Model Penting dalam Machine Learning?"):
         st.markdown(
             "Dalam praktik dunia nyata (*MLOps*), pola data terus berubah seiring waktu (**Data Drift**). "
@@ -1825,7 +2239,12 @@ def page_galeri():
         g = df.groupby([xcol, "Dataset"], as_index=False)[pm].max()
         fig = px.bar(g, x=xcol, y=pm, color="Dataset", barmode="group", text_auto=".3f",
                      title=f"Skor {pm} terbaik per {xcol.lower()}")
-        fig.update_layout(template="lilac", paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)", height=420)
+        fig.update_layout(
+            template="lilac_light",
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(255,255,255,0.85)",
+            height=420,
+        )
         st.plotly_chart(fig, use_container_width=True)
         if len(g) > 1:
             hi, lo = g.loc[g[pm].idxmax()], g.loc[g[pm].idxmin()]
@@ -1980,39 +2399,41 @@ def page_komentar():
 # SIDEBAR & ROUTER
 # ============================================================================
 PAGES = {
-    "🏠 Dashboard Beranda": page_home,
+    "🏠 Dashboard": page_home,
     "📈 Regresi Linear": page_regresi,
     "🧪 Klasifikasi": page_klasifikasi,
     "🔵 Clustering": page_clustering,
     "🏆 Galeri Hasil Training": page_galeri,
-    "🔁 Update Data & Retraining": page_retrain,
-    "💬 Diskusi Komentar": page_komentar,
+    "🗄️ Database & Retrain": page_retrain,
+    "💬 Komentar": page_komentar,
     "🤖 Asisten AI (Groq)": page_ai_assistant,
     "📝 Mini Kuis ML": lambda: page_kuis_ml(db),
 }
 
 MENU_GROUPS = [
-    ("Utama", ["🏠 Dashboard Beranda"]),
-    ("Modul Machine Learning", ["📈 Regresi Linear", "🧪 Klasifikasi", "🔵 Clustering"]),
-    ("Hasil & Referensi", ["🏆 Galeri Hasil Training"]),
-    ("Data & Interaksi", ["🔁 Update Data & Retraining", "💬 Diskusi Komentar"]),
-    ("Edukasi & AI", ["🤖 Asisten AI (Groq)", "📝 Mini Kuis ML"]),
+    ("MENU", ["🏠 Dashboard", "📈 Regresi Linear", "🧪 Klasifikasi", "🔵 Clustering", "🏆 Galeri Hasil Training", "🗄️ Database & Retrain", "💬 Komentar"]),
+    ("EDUKASI & AI", ["🤖 Asisten AI (Groq)", "📝 Mini Kuis ML"]),
 ]
 
 with st.sidebar:
+    st.markdown('<div class="sidebar-title">Machine-Learning</div>', unsafe_allow_html=True)
+
     st.markdown(
         """
-        <div class="sidebar-brand">
-            <div class="sidebar-brand-title">🧠 TAS AI Studio</div>
-            <div class="sidebar-brand-sub">👩‍🎓 Hana Meisaria · 632025057</div>
+        <div class="profile-card">
+            <div class="profile-avatar">🪻</div>
+            <div>
+                <div class="profile-name">Hana Meisaria</div>
+                <div class="profile-id">632025057</div>
+            </div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    choice = st.session_state.get("nav_radio", "🏠 Dashboard Beranda")
+    choice = st.session_state.get("nav_radio", "🏠 Dashboard")
     if choice not in PAGES:
-        choice = "🏠 Dashboard Beranda"
+        choice = "🏠 Dashboard"
 
     for group_title, items in MENU_GROUPS:
         st.markdown(f'<div class="sidebar-section">{group_title}</div>', unsafe_allow_html=True)
@@ -2026,6 +2447,24 @@ with st.sidebar:
                 on_click=change_page,
                 args=(label,),
             )
+
+    st.caption("📊 Ringkasan dataset, status model, dan skor utama.")
+
+    with st.expander("✨ Isi Aplikasi", expanded=True):
+        st.markdown("""
+        <div class="mini-card">
+            <div class="mini-card-title">📈 Regresi</div>
+            <div class="mini-card-desc">Linear Regression · Diabetes & California Housing</div>
+        </div>
+        <div class="mini-card">
+            <div class="mini-card-title">🧩 Klasifikasi + Fuzzy</div>
+            <div class="mini-card-desc">Random Forest, Logistic, KNN, Tree, Fuzzy KNN & FCM</div>
+        </div>
+        <div class="mini-card">
+            <div class="mini-card-title">🔵 Clustering</div>
+            <div class="mini-card-desc">K-Means + PCA 2D, Elbow & Silhouette</div>
+        </div>
+        """, unsafe_allow_html=True)
 
     mongo_badge = '<span class="badge-ok">● Aktif</span>' if db is not None else '<span class="badge-err">● Offline</span>'
     groq_badge = '<span class="badge-ok">● Aktif</span>' if _secret("GROQ_API_KEY") else '<span class="badge-warn">● No Key</span>'
